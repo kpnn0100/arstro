@@ -56,8 +56,8 @@ mistake in this repo.
 | What must Artboard do? | `core/Artboard/docs/requirements.md` (`FR-*`, `NFR-*`) |
 | Why is the code shaped this way? | `docs/architecture.md` |
 | How does this class work? What are the traps? | `docs/detailed_design.md` |
-| What should the UI look and feel like? | `.claude/skills/arstro.design.rule` — the design law for every Arstro front end (tokens, motion, R1–R6, the gotchas) |
-| How do I change Artboard? | `.claude/skills/implement_artboard` (V-model, per-stage) |
+| What should the UI look and feel like? | `.claude/skills/arstro.rule.design` — the design law for every Arstro front end (tokens, motion, R1–R6, the gotchas) |
+| How do I change Artboard? | `.claude/skills/arstro.artboard.implement` (V-model, per-stage) |
 
 **Requirements first, always.** If a change has no requirement, write the requirement, check it
 against the existing ones for conflict, resolve the conflict *in the document*, and only then
@@ -197,7 +197,7 @@ never silently draw nothing, and the emitted C++ must reproduce each definition 
 **An editor panel** — subclass `artboard::Segment`, take `App &`, own your widgets, and ask: can my
 content outgrow my box? If yes, `ui::ListScroll` and the G-20 checklist. Draw your empty state.
 
-**Anything in Artboard** — use the `implement_artboard` skill and follow it stage by stage. The
+**Anything in Artboard** — use the `arstro.artboard.implement` skill and follow it stage by stage. The
 platform-free core is the default; the `IRenderTarget` seam grows only when a thing genuinely
 cannot be composed from the existing primitives, and then *every* adapter changes in the same
 commit.

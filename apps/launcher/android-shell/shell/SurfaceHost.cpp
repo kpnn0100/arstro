@@ -22,22 +22,22 @@ namespace androidshell
              artboard::Color::rgba(20, 18, 24)},
             // 1 status bar — anchored top, height 24, reserves 24px so apps sit below it
             {"statusbar", L::Top, true, true, true, false, 0, 24, 24,
-             artboard::Color::rgba(33, 31, 38)},
+             artboard::Color::rgba(33, 31, 38), true},  // see-through over the wallpaper (§2.3)
             // 2 notification shade — full-screen overlay (input-transparent except the panel, M4)
             {"shade-notifications", L::Overlay, true, true, true, true, 0, 0, 0,
-             artboard::Color::rgba(29, 27, 32, 235)},
+             artboard::Color::rgba(29, 27, 32, 235), true},
             // 3 quick-settings shade — full-screen overlay (M5)
             {"shade-quicksettings", L::Overlay, true, true, true, true, 0, 0, 0,
-             artboard::Color::rgba(43, 41, 48, 235)},
+             artboard::Color::rgba(43, 41, 48, 235), true},
             // 4 gesture edge strip: LEFT — overlay, full height, 32px wide (back gesture, plan §2.7)
             {"edge-left", L::Overlay, true, false, true, true, 32, 0, 0,
-             artboard::Color::rgba(0, 0, 0, 40)},
+             artboard::Color::rgba(0, 0, 0, 40), true},  // invisible (§2.7)
             // 5 gesture edge strip: RIGHT — overlay, full height, 32px wide (back gesture)
             {"edge-right", L::Overlay, false, true, true, true, 32, 0, 0,
-             artboard::Color::rgba(0, 0, 0, 40)},
+             artboard::Color::rgba(0, 0, 0, 40), true},
             // 6 gesture edge strip: BOTTOM — overlay, full width, 24px tall (home/overview/quick-switch)
             {"edge-bottom", L::Overlay, true, true, false, true, 0, 24, 0,
-             artboard::Color::rgba(0, 0, 0, 40)},
+             artboard::Color::rgba(0, 0, 0, 40), true},
         };
         return surfaces;
     }
@@ -106,6 +106,15 @@ namespace androidshell
 
         // A concrete default size so a plain window (or a not-yet-mapped layer surface) has
         // sensible bounds; a phone-portrait shape for the launcher, the configured band otherwise.
+        if (mConfig.transparent)
+        {
+            // An RGBA visual so the cleared-to-transparent frame composites as transparent
+            // rather than black. Absent (no compositing), the surface degrades to opaque.
+            GdkVisual *rgba = gdk_screen_get_rgba_visual(gtk_widget_get_screen(mWindow));
+            if (rgba) gtk_widget_set_visual(mWindow, rgba);
+            gtk_widget_set_app_paintable(mWindow, TRUE);
+        }
+
         const int defW = mConfig.width > 0 ? mConfig.width : 1080;
         const int defH = mConfig.height > 0 ? mConfig.height : 2160;
         gtk_window_set_default_size(GTK_WINDOW(mWindow), defW, defH);
@@ -168,12 +177,25 @@ namespace androidshell
     {
         mTarget.setContext(cr);
 
-        // Placeholder background fill (real content: theme M2, surfaces M1.6+).
-        mTarget.save();
-        mTarget.setTransform(artboard::Transform::identity());
-        artboard::drawRoundedRect(mTarget, artboard::Rect{0, 0, (double)w, (double)h}, 0.0,
-                                  artboard::Paint::filled(mConfig.background));
-        mTarget.restore();
+        if (mConfig.transparent)
+        {
+            // SOURCE, not OVER: replace last frame's pixels with nothing, so a shade that just
+            // closed leaves no ghost of its panel behind.
+            cairo_save(cr);
+            cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+            cairo_set_source_rgba(cr, 0, 0, 0, 0);
+            cairo_paint(cr);
+            cairo_restore(cr);
+        }
+        else
+        {
+            // Placeholder background fill (real content: theme M2, surfaces M1.6+).
+            mTarget.save();
+            mTarget.setTransform(artboard::Transform::identity());
+            artboard::drawRoundedRect(mTarget, artboard::Rect{0, 0, (double)w, (double)h}, 0.0,
+                                      artboard::Paint::filled(mConfig.background));
+            mTarget.restore();
+        }
 
         if (mRoot)
         {
@@ -197,11 +219,34 @@ namespace androidshell
         if (mAnimating && mAnimating(nowMs))
             mDirty = true;
 
+        // Input passthrough follows the content's state (a shade opening takes input from the
+        // frame it becomes visible; one that has closed gives it back).
+        const bool pass = mPassthrough && mPassthrough();
+        if (pass != mPassthroughApplied)
+            applyInputRegion(pass);
+
         // Redraw ONLY when dirty — a static surface does zero redraws once painted.
         if (mDirty && mArea)
             gtk_widget_queue_draw(mArea);
 
         return mDirty;
+    }
+
+    void SurfaceHost::applyInputRegion(bool passthrough)
+    {
+        mPassthroughApplied = passthrough;
+        if (!mWindow) return;  // headless: the flag is the whole observable effect
+        if (passthrough)
+        {
+            // An EMPTY region: no pixel of this surface accepts input (wl_surface.set_input_region).
+            cairo_region_t *none = cairo_region_create();
+            gtk_widget_input_shape_combine_region(mWindow, none);
+            cairo_region_destroy(none);
+        }
+        else
+        {
+            gtk_widget_input_shape_combine_region(mWindow, nullptr);  // NULL = the whole surface
+        }
     }
 
     void SurfaceHost::markDirty()

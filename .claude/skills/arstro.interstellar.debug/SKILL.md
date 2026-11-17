@@ -5,7 +5,7 @@ description: Use to investigate any suspected problem in Interstellar, the video
 
 # arstro.interstellar.debug
 
-> **Invoke `arstro.rule` first**, and `arstro.design.rule` when the report is about something
+> **Invoke `arstro.rule` first**, and `arstro.rule.design` when the report is about something
 > visible. Then read `arstro.interstellar.implement` §0 (the code map) and §5 (the gotchas) — half
 > of all reports are one of those gotchas.
 
@@ -74,7 +74,7 @@ prints `refused: <why>` and exits 3 — the refusal text is often the diagnosis.
 - The render path alone: `render/tests/renderTests.cpp` (fixed inputs).
 - The UI: the app's shot harness and UI tests named in `apps/interstellar/app/NOTES.md` — render the
   state, dump the tree, and look; for motion, pump one frame at a time and compare the LIVE eased
-  value with the target (`arstro.design.rule` §1).
+  value with the target (`arstro.rule.design` §1).
 
 ---
 

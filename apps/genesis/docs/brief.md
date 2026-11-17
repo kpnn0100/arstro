@@ -428,7 +428,7 @@ not a mystery.
 
 All of these are additive, live in the **platform-free core**, need **no `IRenderTarget`
 change**, and are verifiable with `RecordingTarget` — i.e. they are ordinary
-`/implement_artboard` work. Each is useful to `cosmo`, `pulsar`, and the Android shell
+`/arstro.artboard.implement` work. Each is useful to `cosmo`, `pulsar`, and the Android shell
 independently of Genesis, which is the test of whether it belongs in the framework.
 
 | Proposed | What | Why |
@@ -473,7 +473,7 @@ Three things follow from that layout:
 - **`BaseCatalog` is data, not code.** Adding a new authorable base is a table entry plus
   the Artboard base class — not a new code path in the emitter.
 
-Visual language follows `arstro.design.rule` with `cosmo` as reference: same tokens,
+Visual language follows `arstro.rule.design` with `cosmo` as reference: same tokens,
 same motion, its own palette.
 
 ### Screen
@@ -506,7 +506,7 @@ Each ends with something demonstrable; none is a refactor of the last.
 
 | | Milestone | Done when |
 | --- | --- | --- |
-| **M0** | Artboard FR-32/33/34 land via `/implement_artboard` | a hand-written `VisualLoop` subclass fades + spins in `ui-demo`; tests at 100% |
+| **M0** | Artboard FR-32/33/34 land via `/arstro.artboard.implement` | a hand-written `VisualLoop` subclass fades + spins in `ui-demo`; tests at 100% |
 | **M1** | `genesis_core`: Document + Gene (parse/fold/interpret) + `CppEmitter` | `genesis-cc CoolVisualLoop.genesis` emits the §4 code, and it compiles and runs |
 | **M2** | The GUI: shape tree, canvas draw, inspector, bindings, live preview | you can build CoolVisualLoop by hand and watch it |
 | **M3** | Reactions panel + per-reaction scrubber + reduced-motion toggle | your example is authored entirely in the UI |
@@ -546,7 +546,7 @@ GUI doesn't matter. Build it first, in that order.
 
 1. **Repo placement.** I put this at `arstro/apps/genesis/` alongside `cosmo` / `pulsar`,
    since Genesis is an app, while the FR-32…FR-37 work belongs inside `core/Artboard/` under
-   `/implement_artboard`. Say the word if you meant it to live somewhere else.
+   `/arstro.artboard.implement`. Say the word if you meant it to live somewhere else.
 2. **Language name.** "Gene" for the binding language — keep, or something else?
 3. **Verify by real compile (§7.3)** costs a toolchain dependency at authoring time. Worth
    it, or should v1 diff the interpreter against a *second* interpretation of the emitted
@@ -557,6 +557,6 @@ GUI doesn't matter. Build it first, in that order.
 
 ---
 
-*Next step, on your go: run `/implement_artboard` for FR-32 (`Segment::opacity`) — the
+*Next step, on your go: run `/arstro.artboard.implement` for FR-32 (`Segment::opacity`) — the
 smallest piece that makes your exact example expressible, and useful to every app in the
 repo on its own.*

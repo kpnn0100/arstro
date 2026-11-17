@@ -1,13 +1,13 @@
 # Android Theme — Progress Ledger
 
 **This file is the single source of truth for what is done and what to do next.** It is committed
-to git and travels between computers. The `/android.theme.implement` skill reads the **NEXT** line
+to git and travels between computers. The `/arstro.launcher.implement` skill reads the **NEXT** line
 below, does that one task, updates this file, and commits — then repeats until §"Whole-project
 done" is fully checked for **both GNOME and Plasma**.
 
 - Full design + all concrete values: [`android-theme-plan.md`](android-theme-plan.md) (read the
   milestone's plan section before starting it).
-- How to work: the `/android.theme.implement` skill (`.claude/skills/android.theme.implement/`).
+- How to work: the `/arstro.launcher.implement` skill (`.claude/skills/arstro.launcher.implement/`).
 - Checkbox legend: `[ ]` not started · `[~]` in progress · `[x]` done+verified · `[!]` done but
   UNVERIFIED (record why in Verification notes).
 
@@ -404,7 +404,7 @@ future session on another machine doesn't re-litigate it. Format: `YYYY-MM-DD �
   tree-wide "is anything animating?" aggregate. Static content (no predicate) goes idle after one
   paint. **Candidate future AB task:** add `Segment::isAnimating()` (aggregate of child
   Property/Spring/hover activity) so the host can auto-detect animation and drop the per-content
-  predicate — an `implement_artboard` mini-cycle, deferred (not needed until animated surfaces, M2+).
+  predicate — an `arstro.artboard.implement` mini-cycle, deferred (not needed until animated surfaces, M2+).
 - 2026-07-24 — M1.2: added a headless `--render-png` mode (renders any surface to PNG with no
   display, via a `SurfaceHost::paint()` shared with the GTK draw signal). This IS the L1 golden-image
   mechanism — later golden milestones (M2.5, M3.4, …) render + diff through it rather than needing a

@@ -1,9 +1,9 @@
 ---
-name: android.theme.implement
-description: Use to build (or resume building, on any computer) the Android-17-style touch shell theme for GNOME + KDE Plasma on Ubuntu/Fedora, built on Arstro Artboard. This is a long, multi-session, multi-milestone project (launcher, status bar, quick settings, notification panel, gesture navigation, fullscreen/split, animations, icons) tracked by a committed progress ledger so work continues seamlessly across machines. Invoke when the user says things like "continue the android theme", "work on the android theme", "what's next on the android shell", "/android.theme.implement", or resumes this project after moving computers. It reads the ledger, does the next task, updates the ledger, and commits — until the theme is complete on BOTH desktops.
+name: arstro.launcher.implement
+description: Use to build (or resume building, on any computer) the Android-17-style touch shell theme for GNOME + KDE Plasma on Ubuntu/Fedora, built on Arstro Artboard. This is a long, multi-session, multi-milestone project (launcher, status bar, quick settings, notification panel, gesture navigation, fullscreen/split, animations, icons) tracked by a committed progress ledger so work continues seamlessly across machines. Invoke when the user says things like "continue the android theme", "work on the android theme", "what's next on the android shell", "/arstro.launcher.implement", or resumes this project after moving computers. It reads the ledger, does the next task, updates the ledger, and commits — until the theme is complete on BOTH desktops.
 ---
 
-# android.theme.implement
+# arstro.launcher.implement
 
 > **Invoke `arstro.rule` first.** It carries the rules this skill used to restate: the
 > core/front-end split, requirements-first and the conflict rule, the V-model doc-sync loop, the
@@ -78,15 +78,15 @@ and therefore builds into `build/apps/launcher/android-shell/`. Artboard work ha
 
 - **Task changes the Artboard library** (`core/Artboard/` — namespace `artboard`, the render/UI/input core,
   any `IRenderTarget` primitive, a new control, a gesture-recognizer change): use the
-  **`implement_artboard`** skill (its full V-model: requirements → architecture → detailed_design →
+  **`arstro.artboard.implement`** skill (its full V-model: requirements → architecture → detailed_design →
   puml → code → RecordingTarget tests at 100% core coverage → build all adapters → commit to Artboard
   `main`… **but note:** this project commits Artboard work to **`feature/1.0.0`**, the repo's real
   active line — see the ledger's decisions log). M0 is entirely this. Later milestones occasionally
-  need a new Artboard primitive — when they do, it is a mini `implement_artboard` cycle, never an
+  need a new Artboard primitive — when they do, it is a mini `arstro.artboard.implement` cycle, never an
   inline hack in an app or adapter.
 - **Task builds/styles the shell app UI** (`apps/launcher/android-shell/` surfaces, widgets, screens,
   panels — the launcher, status bar, QS, notifications, recents, drawn with Artboard segments): follow
-  the **`arstro.design.rule`** skill's design language (tokens, motion, layout, states) but with the
+  the **`arstro.rule.design`** skill's design language (tokens, motion, layout, states) but with the
   Android-theme palette/metrics from the plan. This is app code, not library code — it consumes
   Artboard, it does not modify it.
 - **Task is host / compositor-bridge / services / packaging** (GTK3+layer-shell host, `CompositorBridge`

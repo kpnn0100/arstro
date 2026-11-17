@@ -42,6 +42,25 @@ namespace androidshell
         }
 
     protected:
+        // An open shade owns its input (plan §2.4): a tap on the scrim — outside the panel —
+        // closes it, and so does swiping up. Card swipe-dismiss and actions are M4.3's.
+        bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override
+        {
+            using T = artboard::Gesture::Type;
+            if (!state || headsUp || expansion() <= 0.001) return false;
+            if (g.type == T::Click && !mPanelRect.contains(local))
+            {
+                state->settleShade(true, 0.0);
+                return true;
+            }
+            if (g.type == T::Drop && g.pos.y - g.start.y < -40)
+            {
+                state->settleShade(true, 0.0);
+                return true;
+            }
+            return true;
+        }
+
         void onPaint(artboard::IRenderTarget &t) const override
         {
             const AndroidColors &c = colors(mode);
@@ -79,6 +98,7 @@ namespace androidshell
             const double ph = contentH < H - 2 * margin ? contentH : H - 2 * margin;
             const double py = margin - (1.0 - e) * (ph + margin);  // slides down into place
 
+            mPanelRect = {px, py, pw, ph};
             artboard::drawElevation(t, {px, py, pw, ph}, shape::kRadiusXL, 6.0);
             artboard::drawRoundedRect(t, {px, py, pw, ph}, shape::kRadiusXL,
                                       artboard::Paint::filled(c.surfaceContainerLow));
@@ -127,6 +147,8 @@ namespace androidshell
         }
 
     private:
+        mutable artboard::Rect mPanelRect{0, 0, 0, 0};  // last painted panel, for the scrim hit-test
+
         void drawCard(artboard::IRenderTarget &t, const AndroidColors &c, const artboard::Rect &r,
                       const Notification &nf) const
         {

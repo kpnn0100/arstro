@@ -75,7 +75,7 @@ there is one host file and not two.
 
 Arstrobench adds no drawing capability: every card, meter, chip and label is paths, text and the
 existing `pushLayer` opacity group. The `IRenderTarget` HAL is untouched, so no adapter needed
-updating (`implement_artboard` §3).
+updating (`arstro.artboard.implement` §3).
 
 ## The one change made outside this app
 

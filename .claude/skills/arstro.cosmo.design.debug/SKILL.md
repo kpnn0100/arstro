@@ -127,7 +127,7 @@ explanation before you go hunting.
 Read the requirement before forming an opinion, and quote it in the entry. The rule is the same as
 `arstro.cosmo.core.debug` §3, with one addition specific to the UI:
 
-- **Contradicts a requirement, or breaks `R-G-1…R-G-3` or `arstro.design.rule`'s R1–R6 → defect.**
+- **Contradicts a requirement, or breaks `R-G-1…R-G-3` or `arstro.rule.design`'s R1–R6 → defect.**
   Those rules are requirements, not preferences: a snap violates R1, an unreachable row violates R6, an
   overflowing string violates R5, a hardcoded size that breaks at 1024px violates R4. You do not need a
   feature-specific requirement to call one of these a defect.

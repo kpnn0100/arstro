@@ -764,8 +764,84 @@ namespace
             notifOk = added && replaced && dismissible && cleared && closed;
         }
 
+        // ---- live bring-up (2026-09-24): see-through + click-through surfaces, shade settle (L0) ----
+        // What the first on-screen run (KWin 5.27) got wrong: an opaque full-screen shade over the
+        // whole output, a closed shade eating every touch, a released shade stuck mid-pull, and an
+        // open one nothing could close. Each check below fails on the code before that fix.
+        bool liveOk = true;
+        {
+            using G = artboard::Gesture;
+            const auto &cfgs = defaultSurfaces();
+            // (A) exactly the launcher is opaque; the bar, both shades and the strips see through.
+            bool flags = true;
+            for (const auto &c : cfgs) flags = flags && (c.transparent == (c.name != "launcher"));
+            // (B) a transparent surface paints nothing where its content does not (alpha 0 over red).
+            SurfaceHost shade(cfgs[2]);
+            shade.setRoot(std::make_shared<artboard::Segment>());
+            cairo_surface_t *cs = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 8, 8);
+            cairo_t *ccr = cairo_create(cs);
+            cairo_set_source_rgb(ccr, 1, 0, 0); cairo_paint(ccr);
+            shade.paint(ccr, 8, 8);
+            cairo_surface_flush(cs);
+            const uint32_t px = *reinterpret_cast<uint32_t *>(cairo_image_surface_get_data(cs));
+            const bool clear = (px >> 24) == 0;
+            cairo_destroy(ccr); cairo_surface_destroy(cs);
+            // (C) the input-passthrough predicate reaches the host each frame, and changes back.
+            bool closed = true;
+            shade.setInputPassthroughQuery([&closed] { return closed; });
+            shade.frameTick(0.0);
+            const bool passClosed = shade.inputPassthrough();
+            closed = false; shade.frameTick(16.0);
+            const bool takesOpen = !shade.inputPassthrough();
+            // (D) a release settles the shade by distance and eases it there — never snaps.
+            NullBridge nb; FakeSystemServices fs; ShellState st(nb, fs);
+            st.holdShade(true); st.notificationsExpansion.set(0.30); st.releaseShade(true);
+            const bool firstStep = st.advanceShades() && st.notificationsExpansion.get() < 1.0;
+            int frames = 1; while (st.advanceShades() && frames < 200) ++frames;
+            const bool opened = st.notificationsExpansion.get() == 1.0 && frames > 3 && frames < 60;
+            st.holdShade(false);  // taking the other side closes this one
+            while (st.advanceShades()) {}
+            const bool dual = st.notificationsExpansion.get() == 0.0;
+            st.quickSettingsExpansion.set(0.20); st.releaseShade(false);
+            while (st.advanceShades()) {}
+            const bool springBack = st.quickSettingsExpansion.get() == 0.0;
+            // (E) the status bar: a short pull flung down still opens (fling overrides distance).
+            auto bar = std::make_shared<arstro::androidshell::StatusBar>();
+            bar->setState(&st); bar->width.set(1000); bar->height.set(24);
+            G g{}; g.type = G::Type::DragStart; g.start = {800, 10}; g.pos = {800, 12};
+            bar->onGesture(g);
+            g.type = G::Type::Drag; g.pos = {800, 70}; bar->onGesture(g);
+            g.type = G::Type::Up; bar->onGesture(g);
+            g.type = G::Type::Drop; bar->onGesture(g);
+            const bool shortClosed = st.quickSettingsTarget == 0.0;
+            g.type = G::Type::Fling; g.velocity = {0, 900}; bar->onGesture(g);
+            const bool flungOpen = st.quickSettingsTarget == 1.0;
+            // (F) an open notification shade closes on a tap on the scrim, not on the panel.
+            st.notificationsExpansion.set(1.0); st.notificationsTarget = 1.0;
+            arstro::androidshell::NotificationStore ns;
+            auto panel = std::make_shared<arstro::androidshell::NotificationPanel>();
+            panel->store = &ns; panel->state = &st;
+            SurfaceHost ph(cfgs[2]); ph.setRoot(panel);
+            cairo_surface_t *ps = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1000, 800);
+            cairo_t *pcr = cairo_create(ps);
+            ph.paint(pcr, 1000, 800);  // lays out the panel rect the hit-test reads
+            cairo_destroy(pcr); cairo_surface_destroy(ps);
+            G tap{}; tap.type = G::Type::Click; tap.pos = tap.start = {100, 60};  // inside the panel
+            panel->onGesture(tap);
+            const bool panelKeeps = st.notificationsTarget == 1.0;
+            tap.pos = tap.start = {800, 600};                                     // on the scrim
+            panel->onGesture(tap);
+            const bool scrimCloses = st.notificationsTarget == 0.0;
+            liveOk = flags && clear && passClosed && takesOpen && firstStep && opened && dual &&
+                     springBack && shortClosed && flungOpen && panelKeeps && scrimCloses;
+            if (!liveOk)
+                std::fprintf(stderr, "live: flags=%d clear=%d pass=%d/%d settle=%d/%d/%d/%d bar=%d/%d scrim=%d/%d\n",
+                             flags, clear, passClosed, takesOpen, firstStep, opened, dual, springBack,
+                             shortClosed, flungOpen, panelKeeps, scrimCloses);
+        }
+
         const bool ok = paintOk && clockOk && inputOk && stateOk && multiOk && themeOk &&
-                        typeShapeMotionOk && iconsOk && maskOk && statusBarOk && notifOk;
+                        typeShapeMotionOk && iconsOk && maskOk && statusBarOk && notifOk && liveOk;
         const bool haveLayerShell =
 #ifdef HAVE_GTK_LAYER_SHELL
             true;
@@ -783,6 +859,7 @@ namespace
                     themeOk ? "ok" : "error", typeShapeMotionOk ? "ok" : "error",
                     iconsOk ? "ok" : "error", maskOk ? "ok" : "error", statusBarOk ? "ok" : "error",
                     notifOk ? "ok" : "error");
+        std::printf("  live-surfaces: %s\n", liveOk ? "ok" : "error");
         return ok ? 0 : 2;
     }
 }
@@ -850,6 +927,11 @@ int main(int argc, char **argv)
     notifPanel->store = &notifStore;
     notifPanel->state = &state;
 
+    // Released shades ease to open/closed here, once per frame, BEFORE the surfaces tick, so a
+    // shade repaints on the very frame its fraction moved (including the last one, to 0).
+    static bool shadesMoving = false;
+    clock.add([](double) { shadesMoving = state.advanceShades(); });
+
     const auto &cfgs = defaultSurfaces();
     for (size_t i = 0; i < cfgs.size(); ++i)
     {
@@ -861,14 +943,17 @@ int main(int argc, char **argv)
         {
             h->setRoot(notifPanel);
             // redraw the shade while it is open (drag animation + arriving notifications), idle closed.
-            h->setAnimatingQuery([](double) { return state.notificationsExpansion.get() > 0.001; });
+            h->setAnimatingQuery([](double) { return state.notificationsExpansion.get() > 0.001 || shadesMoving; });
+            // closed = click-through, so the launcher under it stays touchable (plan §3.1)
+            h->setInputPassthroughQuery([] { return state.notificationsExpansion.get() <= 0.001; });
         }
         else if (cfgs[i].name == "shade-quicksettings")
         {
             static auto qs = std::make_shared<arstro::androidshell::QuickSettings>();
             qs->state = &state; qs->services = &services;
             h->setRoot(qs);
-            h->setAnimatingQuery([](double) { return state.quickSettingsExpansion.get() > 0.001; });
+            h->setAnimatingQuery([](double) { return state.quickSettingsExpansion.get() > 0.001 || shadesMoving; });
+            h->setInputPassthroughQuery([] { return state.quickSettingsExpansion.get() <= 0.001; });
         }
         else if (cfgs[i].name == "launcher")
         {
@@ -877,6 +962,14 @@ int main(int argc, char **argv)
             launcher->apps = &appList; launcher->mode = ThemeMode::Dark;
             h->setRoot(launcher);
             h->setAnimatingQuery([](double) { return true; });  // launcher animates (drawer ease)
+        }
+        else if (cfgs[i].name.rfind("edge-", 0) == 0)
+        {
+            // Invisible gesture strips (plan §2.7). Nothing handles a back/home swipe yet (M7.2/
+            // M7.3 are unbuilt), so until they are the strips pass input through rather than
+            // swallow a 32 px margin of the launcher and the shades for no behaviour at all.
+            h->setRoot(std::make_shared<artboard::Segment>());
+            h->setInputPassthroughQuery([] { return true; });
         }
         else h->setRoot(makeRoot(cfgs[i]));
         h->setShellState(&state);

@@ -1,6 +1,6 @@
 ---
 name: arstro.rule
-description: The base rules every Arstro skill obeys — the core/front-end split, requirements-first with the conflict rule, the V-model doc-sync loop, the agent-drivable surface and its generated API document, the ledger/defect/commit conventions, and the rule for updating these rules. Invoked FIRST by every other arstro.* skill (and by implement_artboard / the DSP skills) so eleven skills stop carrying eleven copies of the same law. Invoke directly when starting work in an Arstro repo with no more specific skill, when scaffolding a new app (interstellar, solaris, pulsar), or when asked "what are the rules here".
+description: The base rules every Arstro skill obeys — the core/front-end split, requirements-first with the conflict rule, the V-model doc-sync loop, the agent-drivable surface and its generated API document, the ledger/defect/commit conventions, and the rule for updating these rules. Invoked FIRST by every other arstro.* skill (and by arstro.artboard.implement / the DSP skills) so eleven skills stop carrying eleven copies of the same law. Invoke directly when starting work in an Arstro repo with no more specific skill, when scaffolding a new app (interstellar, solaris, pulsar), or when asked "what are the rules here".
 ---
 
 # arstro.rule
@@ -346,6 +346,17 @@ and a picture the agent must judge (a photo, a frame) is a tool that returns an 
 service's own render, never a file path the agent has to go and open. A new app gets its `mcp`
 subcommand when it reaches rung 3.
 
+### The user's agent, inside the app
+
+**Every app with a service and a window offers the user's own agent through one shared module**
+(added 2026-11-17, cosmo R-ASSIST-13): the Agent panel (`apps/cosmo/widgets/AgentPanel`), the
+process and its protocols (`apps/cosmo/AssistProcess`, Claude Code stream-JSON and any ACP agent),
+and the conversation a service owns (`apps/cosmo/core/assist/AssistConversation`), compiled in
+place and parameterised by an `AssistProfile`. The agent's hands are that app's
+`<app>-cc mcp --attach <control socket>`: it edits what the user is looking at, each line one
+undo step, and it is given the app's end-user skills, never an `*.implement`, `*.debug` or
+`arstro.rule*` skill. Do not write a second agent runner; write a profile.
+
 ### The conformance ladder
 
 No app but cosmo is near the top. **State which rung the unit is on, and build the next one** —
@@ -525,14 +536,14 @@ Every Arstro skill invokes `arstro.rule` first, then applies its own:
 
 | skill | adds |
 |---|---|
-| `arstro.design.rule` | the design law — invoked first by every design skill |
+| `arstro.rule.design` | the design law — invoked first by every design skill |
 | `arstro.cosmo.core.implement` | cosmo's service/engine map, R-SVC invariants, the add-an-adjustment recipe |
-| `arstro.cosmo.design.implement` | cosmo's design values + process (on top of `arstro.design.rule`) |
+| `arstro.cosmo.design.implement` | cosmo's design values + process (on top of `arstro.rule.design`) |
 | `arstro.cosmo.core.debug` · `arstro.cosmo.design.debug` | reproduce/judge/file, and the `D-<n>` entry format |
-| `implement_artboard` | the HAL seam rule, RecordingTarget assertions, 100% core coverage |
+| `arstro.artboard.implement` | the HAL seam rule, RecordingTarget assertions, 100% core coverage |
 | `arstro.dsp.implement` (+ `.experimental`) | compose-don't-duplicate, derive the math, document every equation |
 | `arstro.piano.implement` | which milestone is next, and how to measure it |
-| `android.theme.implement` | the shell milestones and its own ledger |
+| `arstro.launcher.implement` | the shell milestones and its own ledger |
 | `arstro.interstellar.implement` · `.debug` | Interstellar's map, laws and recipes |
 | `arstro.solaris.implement` · `.debug` | Solaris's map, laws and recipes — above all, that its sound is built in the DSP library — and its reproduce/measure/file loop |
 

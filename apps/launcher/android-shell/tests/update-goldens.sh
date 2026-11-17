@@ -4,7 +4,7 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"     # .../android-shell/tests
 SHELL_DIR="$(dirname "$HERE")"                            # .../android-shell
-REPO_ROOT="$(cd "$SHELL_DIR/../.." && pwd)"
+REPO_ROOT="$(cd "$SHELL_DIR/../../.." && pwd)"               # umbrella root (apps/launcher/android-shell)
 GOLDEN="$HERE/golden"; mkdir -p "$GOLDEN"
 BIN="$(find "$REPO_ROOT/build" -name arstro-android-shell -type f 2>/dev/null | head -1)"
 [ -z "${BIN:-}" ] && { echo "build arstro-android-shell first: cmake --build build"; exit 1; }

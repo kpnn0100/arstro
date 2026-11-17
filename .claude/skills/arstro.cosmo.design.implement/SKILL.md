@@ -24,12 +24,12 @@ harness (`cosmo_shots`, `cosmo_ui_tests`) · **the web front end `apps/cosmo/web
 orchestration. Those are **`arstro.cosmo.core.implement`**. A task spanning both is two commits: core
 first, then design.
 
-**You sit on top of `arstro.design.rule`**, the design law for every Arstro front end (the token
+**You sit on top of `arstro.rule.design`**, the design law for every Arstro front end (the token
 contract, the non-negotiable motion rule, R1–R6, the layout and widget conventions, the twenty
 gotchas). **Invoke it before this file.** That skill is the law; this one is cosmo's concrete
-dialect of it, plus cosmo's process. When they appear to disagree, `arstro.design.rule` wins on
+dialect of it, plus cosmo's process. When they appear to disagree, `arstro.rule.design` wins on
 *rules* and this file wins on *cosmo's values*. (It replaces the retired `arstro.design.desktop`.)
-A genuinely reusable control belongs in Artboard via **`implement_artboard`**, not in `widgets/`.
+A genuinely reusable control belongs in Artboard via **`arstro.artboard.implement`**, not in `widgets/`.
 
 ---
 
@@ -487,7 +487,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ```
 
 Artboard changes are a **submodule** commit plus an umbrella pointer bump — and they go through
-`implement_artboard`, not this skill. **Then pull and push** — `arstro.rule` §7 has the order.
+`arstro.artboard.implement`, not this skill. **Then pull and push** — `arstro.rule` §7 has the order.
 
 ---
 
@@ -510,7 +510,7 @@ Artboard changes are a **submodule** commit plus an umbrella pointer bump — an
       shown, wheel and drag agree, an unscrollable list bubbles the wheel.
 - [ ] **Tokens only:** one accent, one radius scale, one type ramp; no raw hex or off-ladder px in a widget.
 - [ ] **Every state drawn**, including empty and loading; contrast ≈ WCAG AA.
-- [ ] Built on Artboard; a genuinely reusable control went to Artboard via `implement_artboard`.
+- [ ] Built on Artboard; a genuinely reusable control went to Artboard via `arstro.artboard.implement`.
 - [ ] **You looked at it** — shots rendered at 2+ sizes, mid-transition and at rest (§8).
 - [ ] UI debug logging covers the new surface (§7); `ui dump` over the socket shows it correctly.
 - [ ] Docs and puml in sync (§9); `PROGRESS.md` and `DEFECTS.md` updated; committed to `main`.

@@ -60,6 +60,7 @@ namespace androidshell
             {
                 mDragging = true;
                 mLeftHalf = g.start.x < width.value() * 0.5;
+                mState->holdShade(mLeftHalf);
                 return true;
             }
             if (g.type == T::Drag && mDragging)
@@ -70,9 +71,17 @@ namespace androidshell
                 (mLeftHalf ? mState->notificationsExpansion : mState->quickSettingsExpansion).set(frac);
                 return true;
             }
-            if (g.type == T::Up || g.type == T::Drop)
+            // Release (Up, then Drop, then Fling — the recognizer's order): settle by distance,
+            // then let a fast enough fling override it either way (plan §2.4).
+            if ((g.type == T::Up || g.type == T::Drop) && mDragging)
             {
                 mDragging = false;
+                mState->releaseShade(mLeftHalf);
+                return true;
+            }
+            if (g.type == T::Fling && std::fabs(g.velocity.y) > ShellState::kFlingOpen)
+            {
+                mState->settleShade(mLeftHalf, g.velocity.y > 0 ? 1.0 : 0.0);
                 return true;
             }
             return false;

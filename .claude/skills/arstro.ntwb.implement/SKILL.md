@@ -3,7 +3,7 @@ name: arstro.ntwb.implement
 description: The app side of NTWB (native-to-web bridge) in the arstro repo - the C++ client library core/Ntwb and an Arstro app's NTWB adapter and web UI (Cosmo's `cosmo-cc ntwb`, apps/cosmo/web). Use to change core/Ntwb, re-vendor the protocol after it changed in Arstro Remote, give an app's web UI something new, or adapt another Arstro app (genesis, interstellar ...) so Arstro Remote lists it under Apps. Keeps protocol, API and documents consistent - the protocol's copy of record is Arstro Remote's spec.py. Invoke for "adapt <app> to Arstro Remote / NTWB", "the web UI of cosmo needs X", "update core/Ntwb", "/arstro.ntwb.implement".
 ---
 
-# arstro.ntwb.implement (app side)
+# arstro.ntwb.implement
 
 > **Invoke `arstro.rule` first**, and the app's own implement skill (for Cosmo:
 > `arstro.cosmo.core.implement` for the adapter and model, `arstro.cosmo.design.implement` for the

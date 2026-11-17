@@ -5,7 +5,7 @@ description: Use to investigate any suspected problem in Solaris, the Arstro DAW
 
 # arstro.solaris.debug
 
-> **Invoke `arstro.rule` first**, `arstro.design.rule` when the report is about something visible,
+> **Invoke `arstro.rule` first**, `arstro.rule.design` when the report is about something visible,
 > and `arstro.dsp.implement` §0 when it is about how something sounds. Then read
 > `arstro.solaris.implement` §0 (the code map), §1 (the laws) and §5 (the gotchas) — a good share of
 > reports are one of those laws working as written, or one of those gotchas come back.
@@ -117,7 +117,7 @@ offline.
   cause is there.
 - **The UI:** `solaris_app_shots --only <state> --outdir $SCRATCH/shots` and READ the PNG; for a
   snap, drive `tests/Rig.h` one `frame()` at a time and compare the LIVE eased value (`…Live(id)`,
-  `…Amount(id)`) with the target — a transition is only provable mid-tween (`arstro.design.rule` §1);
+  `…Amount(id)`) with the target — a transition is only provable mid-tween (`arstro.rule.design` §1);
   for a wiring question, `DISPLAY=:1 timeout 5 build/apps/solaris/solaris song.slp` (exit 124 = ran).
 
 ---
@@ -154,7 +154,7 @@ allocation, lock or file access on the audio thread (R-PLAY-2); a refused comman
 song or announced a change (D-1's class); an unknown verb, flag, address, device type or parameter
 that was ACCEPTED (R-SVC-3); sound produced in `apps/solaris/` instead of the DSP library (R-DSP-1);
 a behaviour reachable only by clicking (R-G-4); a visible value that changes in one frame
-(`arstro.design.rule` §1); a control cut off with no way to reach it (R6).
+(`arstro.rule.design` §1); a control cut off with no way to reach it (R6).
 
 **A requirement gap** — the documents are silent or contradict each other: decide what it should be
 from the neighbouring requirements and `docs/discussion.md`, write the R- line (conflict-checked), then

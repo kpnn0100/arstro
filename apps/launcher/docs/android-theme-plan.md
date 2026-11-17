@@ -10,7 +10,7 @@ re-deriving decisions.
 
 **M0 (Artboard primitives AB-1…AB-6) is DONE** — implemented, unit-tested (100% line coverage
 on every touched core file via `RecordingTarget`), documented (requirements/architecture/
-detailed_design/puml kept in sync per `/implement_artboard`), and committed one-feature-per-commit
+detailed_design/puml kept in sync per `/arstro.artboard.implement`), and committed one-feature-per-commit
 to the Artboard repo's `feature/1.0.0` branch (its actual active development line — `main` there
 is a stale, 3-commit branch predating all of this project's real feature work; nothing was merged
 to `main`, and no branch was created for this — `feature/1.0.0` was already checked out before
@@ -41,7 +41,7 @@ Conventions used below:
 ## 0. Reading order for the implementer
 
 1. This file, top to bottom.
-2. `core/Artboard/docs/requirements.md` (mandatory per `/implement_artboard` — every Artboard change below follows that skill's V-model).
+2. `core/Artboard/docs/requirements.md` (mandatory per `/arstro.artboard.implement` — every Artboard change below follows that skill's V-model).
 3. `apps/cosmo/linux_main.cpp` — the GTK3→CairoTarget host glue to copy.
 4. `apps/cosmo/touch/PhoneApp.{h,cpp}` — existing touch-style Artboard app (screens + animated transitions); reuse its patterns.
 5. Only then open `$A` files when a **(v)**/pointer says so. Never grep `$A` root (153 GB).
@@ -84,7 +84,7 @@ Two integration tracks (§3.2): **Plasma/KWin** (primary — has layer-shell) an
 
 ### 2.1 Global principles
 
-- Everything animates (Artboard rule §2A of `implement_artboard` matches Android's behavior): panels slide/settle with springs, state changes crossfade, nothing pops.
+- Everything animates (Artboard rule §2A of `arstro.artboard.implement` matches Android's behavior): panels slide/settle with springs, state changes crossfade, nothing pops.
 - All chrome is drawn by us via Artboard; no GTK widgets except the host `GtkDrawingArea` per surface.
 - Dark and light theme both required, switchable live (Observable `ThemeMode`).
 
@@ -359,7 +359,7 @@ launcher/
 
 ---
 
-## 4. Artboard changes (each = one `/implement_artboard` V-model cycle)
+## 4. Artboard changes (each = one `/arstro.artboard.implement` V-model cycle)
 
 Existing capabilities already sufficient: gradients, `clipRect`, text + `measureText`,
 raster images, tween/Animator/Spring/reduced-motion, Segment/snap/Row/Column, overlay pass,

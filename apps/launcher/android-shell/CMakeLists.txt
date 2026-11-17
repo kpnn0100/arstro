@@ -71,6 +71,10 @@ else()
                   "(fine for M1.1). Install libgtk-layer-shell-dev / gtk-layer-shell for M1.2+ surfaces.")
 endif()
 
+# The headless self-test (every L0 check, incl. the live-surface behaviour the first on-screen run
+# found wrong) registered with the umbrella ctest — it needs no display and exits non-zero on failure.
+add_test(NAME android_shell_self_test COMMAND arstro-android-shell --self-test)
+
 # ── Install + packaging (M9) ──
 include(GNUInstallDirs)
 install(TARGETS arstro-android-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

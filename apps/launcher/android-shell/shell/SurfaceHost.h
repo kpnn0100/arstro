@@ -39,6 +39,12 @@ namespace androidshell
         int width = 0, height = 0;            // px; 0 = stretch along an anchored axis / WM default
         int exclusiveZone = 0;                // reserve this many px so maximized apps avoid us
         artboard::Color background{0, 0, 0, 1};  // placeholder fill until real content (M2/M1.6)
+        // See-through surface (status bar over the wallpaper, the two shades, the edge strips):
+        // an RGBA visual, cleared to fully transparent each frame instead of `background`, so
+        // whatever is beneath shows through wherever the content does not paint. Without this a
+        // full-screen overlay shade is an opaque sheet over the whole output — which is exactly
+        // what the first on-screen run showed (2026-09-24, KWin 5.27 on an Orange Pi 5 Plus).
+        bool transparent = false;
     };
 
     // The M1 surface set (plan §3.1). Defined once here so --surface=N and the M1.6
@@ -92,6 +98,14 @@ namespace androidshell
         // aggregate could make this automatic; until then content declares it (see ledger).
         void setAnimatingQuery(std::function<bool(double nowMs)> q) { mAnimating = std::move(q); }
 
+        // Input passthrough (plan §3.1: a shade is "input-transparent except the panel, input
+        // region set per-frame"). While the predicate returns true the surface's input region is
+        // EMPTY, so touches fall through to the surface beneath (a closed shade must not swallow
+        // the launcher). Re-evaluated every frameTick; the region is only re-sent to the
+        // compositor when the answer changes. Empty (default) = the surface always takes input.
+        void setInputPassthroughQuery(std::function<bool()> q) { mPassthrough = std::move(q); }
+        bool inputPassthrough() const { return mPassthroughApplied; }
+
         artboard::GestureRecognizer &recognizer() { return mRecognizer; }
         long paintCount() const { return mPaintCount; }
         bool dirty() const { return mDirty; }
@@ -113,6 +127,9 @@ namespace androidshell
         std::shared_ptr<artboard::Segment> mRoot;
         artboard::GestureRecognizer mRecognizer;        // per-surface; sink wired in M1.4
         std::function<bool(double)> mAnimating;         // content's "am I animating?" predicate
+        std::function<bool()> mPassthrough;             // "take no input right now?" predicate
+        bool mPassthroughApplied = false;               // the input region currently sent
+        void applyInputRegion(bool passthrough);
         bool mDirty = true;                             // starts true so the first frame paints
         long mPaintCount = 0;
         ShellState *mShellState = nullptr;              // shared state (M1.5); consumed at M3+

@@ -5,7 +5,7 @@ description: Use to implement or resume ANY work in Interstellar, the video colo
 
 # arstro.interstellar.implement
 
-> **Invoke `arstro.rule` first, then `arstro.design.rule` when the task touches a pixel.** They own
+> **Invoke `arstro.rule` first, then `arstro.rule.design` when the task touches a pixel.** They own
 > the core/front-end split, requirements-first, the V-model doc sync, the ledger/defect/commit
 > conventions and the design law. This file is Interstellar's map and checklist on top of them.
 
@@ -216,8 +216,8 @@ both RGBA hashes; they must match.
 
 ## 6. The UI (`apps/interstellar/app/`)
 
-Design law: `arstro.design.rule`; values: cosmo's (`arstro.cosmo.design.implement`). Interstellar
-**aliases** cosmo's token namespaces and forks ONE token: the accent `#CF5AED`, installed at startup
+Design law: `arstro.rule.design`; values: cosmo's (`arstro.cosmo.design.implement`). Interstellar
+**aliases** cosmo's token namespaces and forks ONE token: the accent, teal `#159387` (R-UI-2, amended 2026-11-17; it was purple-pink `#CF5AED`; the logo Warp, its animations and the opening splash are cosmo's `BrandMark` / `SplashScreen`, compiled here — R-BRAND, `arstro.rule.brand`, `arstro.rule.animation`), installed at startup
 with `arstro::cosmo_v2::palette::setAccent` (cosmo R-G-5) so every reused cosmo widget renders in
 purple-pink. Cosmo's panels (`ParamPanel`, `MixerPanel`, `CurvePanel`, `GradePanel`, `XformPanel`,
 `HistogramWidget`, `EditStackTabs`, …) are compiled from `apps/cosmo/widgets/`, never copied.

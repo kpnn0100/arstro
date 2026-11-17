@@ -1,9 +1,9 @@
 ---
-name: arstro.design.rule
+name: arstro.rule.design
 description: The design law for every Arstro front end — cosmo, pulsar, genesis, arstrobench, the launcher shell, and the coming interstellar and solaris UIs. Carries the token contract, the non-negotiable motion rule, the six R-rules (smooth, responsive, contained, window-responsive, text fits, reachable), the layout and widget conventions, the twenty gotchas already paid for, the every-state checklist, and how to verify by looking. Invoked FIRST by every design skill; replaces the retired arstro.design.desktop. Invoke directly for "add a panel/screen/dialog", "restyle this", "make it consistent with cosmo", "audit this app's design", "why does this snap", or when starting a UI for an app that has none.
 ---
 
-# arstro.design.rule
+# arstro.rule.design
 
 **The law for every pixel an Arstro app draws.** Invoked first by every design skill, so one family
 of apps looks and behaves like one family — and so a rule about motion or overflow lives in one file
@@ -41,6 +41,10 @@ is cosmo's, and it is the family default.
 ## 1. THE NON-NEGOTIABLE RULE — nothing changes in one frame
 
 **No property a user can see may change suddenly. Ever. Every visible change is an animation.**
+
+**What a correct animation looks like is its own law: `arstro.rule.animation`** — never stretch an
+object, every move has a strong speed slope in and out, a leaving object fades *while* it moves.
+Invoke it before designing or changing any motion.
 
 Not a quality bar to trade against a deadline, and not satisfied by animating the things that
 obviously move. It is the first thing to check when you write code and the last before you commit.
@@ -256,6 +260,34 @@ itself.
 is unreachable by a user. **An app must read the OS or its own setting once at startup and call
 it** — an accessibility feature nobody can turn on is not a feature.
 
+### 2.7 The family standard — one behaviour in every app
+
+**Cosmo, Interstellar and Solaris answer these the same way** (decided 2026-11-17, cosmo
+R-FAMILY-0; do not re-decide them per app). An app chooses its accent and its own menus, not these:
+
+- **Menus** are File · Edit · the app's own menus · View. **Settings is File ▸ Settings…** (Ctrl+,).
+  A menu row shows its shortcut in a right-aligned column; menus have separators and a dim disabled
+  state. Build them from `MenuStrip::Item` / `ContextMenu::Item` (`shortcut`, `enabled`,
+  `separator`, `Item::sep()`); a separator counts as an item when you index rows.
+- **Unsaved** is a foreground-coloured dot after the project name (`DirtyDot`, radius 3), a save
+  icon that lights, and the window title `*Name — App`. The project name sits left, after the menus.
+- **One toast** (`Toast`): top-centre under the top bar, kinds info / warning / error, held 3200 ms.
+  Warning is `palette::warning()`, error `palette::destructive()`; the accent is never a toast colour.
+- **The unsaved dialog** is `Save changes to "<name>"?` with Cancel · Don't save · Save. The
+  destructive button is OUTLINED when a primary button sits beside it and FILLED when it is the only
+  action: `ConfirmDialog::setDestructiveStyle(DestructiveStyle::Auto)`.
+- **Words:** menu items in Title Case; buttons and sentences in sentence case; an ellipsis is U+2026,
+  never three dots.
+- **A segmented fill picks a mode; an accent underline switches a page.** Do not use one for the other.
+- **The agent** is opened by View ▸ Show Agent / Hide Agent.
+- **The wordmark** is `<name>.` drawn by `Wordmark::draw`, which places the accent dot by measured
+  width.
+
+The shared pieces live in `apps/cosmo/widgets` and `apps/cosmo/Theme.h` (`palette::warning()`,
+`space::`, `motion::`) and are compiled in place by the other two apps. **A new shared piece is
+opt-in, with a default that leaves every app's pixels where they were** — three apps adopt it one
+at a time, and a default that moved pixels would move them in the two that have not looked yet.
+
 ---
 
 ## 3. The six rules
@@ -400,7 +432,7 @@ protected:
 - **Publish the geometry a test or a shot must aim at.** A test that hard-codes where it thinks a
   control is keeps passing after the control moves.
 - **Reuse before you build**, and **a genuinely reusable control belongs in Artboard** (via
-  `implement_artboard`, with docs and tests) — not grown inside one app where others cannot share it.
+  `arstro.artboard.implement`, with docs and tests) — not grown inside one app where others cannot share it.
 
 ### Hover — two mechanisms, and when each
 

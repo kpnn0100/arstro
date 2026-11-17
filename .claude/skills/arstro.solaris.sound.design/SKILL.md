@@ -22,6 +22,24 @@ does not exist, that is a DSP task (`arstro.dsp.implement`) — never a sample h
 
 ---
 
+## Inside Solaris — when the app itself started you
+
+If the environment variable `SOLARIS_CONTROL` is set, you are the user's agent **inside the Solaris
+window**, and the rules of this skill change in three ways:
+
+- **Work on the song that is open.** Use the `solaris_*` MCP tools (`solaris_state` to see it,
+  `solaris_run` to change it): every line appears in the user's window and is one step of their undo.
+  Do not `project new`, do not write into the skill folder, and do not render a batch of files into
+  an output folder.
+- **The user judges in their own window, not in the Lab.** Do not start the lab server and do not
+  ask for marks there. Make ONE proposal in the open song, say in a sentence what you made and where
+  (bars, instrument), and let them play it. If they dislike it, `undo` and try another.
+- **The taste notes, the elements and the relations below** stay the method. You still cannot hear: check with `show <id>`, `audit` and
+  `render --out <file.wav> --measure`, and say what you measured.
+
+The scripts below are for a developer session in the repository; inside the window, read them for
+the method and do the work through the tools.
+
 ## 0. Before a single sound
 
 1. **Read `taste.md`.**

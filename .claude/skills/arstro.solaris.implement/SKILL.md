@@ -5,7 +5,7 @@ description: Use to implement or resume ANY work in Solaris, the Arstro DAW — 
 
 # arstro.solaris.implement
 
-> **Invoke `arstro.rule` first; `arstro.design.rule` when the task touches a pixel; `arstro.dsp.implement`
+> **Invoke `arstro.rule` first; `arstro.rule.design` when the task touches a pixel; `arstro.dsp.implement`
 > when it touches a sample of sound.** They own the core/front-end split, requirements-first, the
 > V-model doc sync, the ledger/defect/commit conventions, the design law and the DSP law. This file
 > is Solaris's map, laws and recipes on top of them.
@@ -115,7 +115,7 @@ the ledger; build it (it is probably NEXT) or say it is missing.
 13. **The UI dispatches TEXT** through `AppHooks::dispatch`, and draws ONLY from the model. A second
     front end must give the same answer, so anything it would have to re-derive (a strip's colour,
     which routes are legal, "fed by") is computed in the service and published in `AppModel`.
-14. **Nothing on screen changes in one frame** (`arstro.design.rule` §1). Every value the model sets
+14. **Nothing on screen changes in one frame** (`arstro.rule.design` §1). Every value the model sets
     is drawn through an eased copy keyed by identity; a dragged control follows the pointer exactly;
     lists are keyed (`AnimatedRows`, per-id live state) so things grow in, shrink out and slide.
 15. **Mix laws are Interstellar's** (R-MIX-11): balance pan with unity at centre, linear-amplitude
@@ -361,10 +361,12 @@ UI:
 
 ## 6. The UI (`apps/solaris/app/`)
 
-Design law: `arstro.design.rule`; values: cosmo's. Solaris **aliases** cosmo's token namespaces and
-forks ONE token, the accent — teal `#159387` (R-UI-2: cosmo blue's luminance, so white on it reads at
-3.8:1) — installed first thing with `palette::setAccent`. Solo is amber and record red, never the
-accent. Cosmo's widgets (`ConfirmDialog`, `ContextMenu`, `SliderRow`, `Icons`, `Theme`, fonts) are
+Design law: `arstro.rule.design`; values: cosmo's. Solaris **aliases** cosmo's token namespaces and
+forks ONE token, the accent — orange `#DD5A0C` (R-UI-2, amended 2026-11-17, was teal `#159387`:
+the Synth sun's orange at cosmo blue's luminance, so white on it reads at 3.8:1) — installed first thing with `palette::setAccent`. Solo is amber and record red, never the
+accent (orange now sits between them — knowingly; if it confuses, move `solo()`, not the accent). The logo
+(Synth sun), its animations and the opening splash are cosmo's `BrandMark` / `SplashScreen`, compiled
+here (R-BRAND); the laws are `arstro.rule.brand` and `arstro.rule.animation`. Cosmo's widgets (`ConfirmDialog`, `ContextMenu`, `SliderRow`, `Icons`, `Theme`, fonts) are
 compiled from `apps/cosmo/`; Interstellar's header helpers (`TextFit`, `EasedScroll`, `Glyphs`,
 `AnimatedRows`, `FadePage`) are included in place — never copied (R-UI-4; their Artboard home is T1).
 A change to a cosmo widget is OPT-IN only and cosmo's own tests must still pass.

@@ -2,7 +2,7 @@
 
 The single shared source of truth for Arstrobench behaviour. **Every agent must read this
 before implementing, and check any new/changed requirement here for conflict before writing
-code** (mirrors the `implement_artboard` V-model, step 1).
+code** (mirrors the `arstro.artboard.implement` V-model, step 1).
 
 Arstrobench is an *application* built on the Artboard library, the `arstro_image`
 ImageProcessing engine and the `arstro_dsp` DigitalSignalProcessing library. Artboard keeps
@@ -163,7 +163,7 @@ operating system) so two results can be compared meaningfully.
 
 - **R-UI-1 Fixed 1000 × 700 window, non-resizable.** The layout is a fixed composition sized to
   its content, so no panel can ever overflow its box and nothing needs to scroll (the
-  `implement_artboard` overflow rule is satisfied structurally rather than by adding scrolling
+  `arstro.artboard.implement` overflow rule is satisfied structurally rather than by adding scrolling
   that could never engage). Deliberate and documented: if the window ever becomes resizable, every
   panel in it needs the clip-and-scroll treatment first.
 - **R-UI-2 Screen composition.** Top to bottom: a header (wordmark + Run button), two

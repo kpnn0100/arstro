@@ -40,12 +40,21 @@ namespace androidshell
         {
             using T = artboard::Gesture::Type;
             if (!services) return false;
+            if (expansion() <= 0.001) return false;
             if (g.type == T::Click)
             {
                 const int idx = tileAt(local);
                 if (idx >= 0) { toggleTile(idx); return true; }
+                // A tap on the scrim (outside the panel) closes the shade (plan §2.4/§2.5).
+                if (!mPanelRect.contains(local) && state) { state->settleShade(false, 0.0); return true; }
             }
-            return false;
+            // Swiping up anywhere pushes the open shade closed.
+            if (g.type == T::Drop && g.pos.y - g.start.y < -40 && state)
+            {
+                state->settleShade(false, 0.0);
+                return true;
+            }
+            return true;  // an open shade owns every touch on it; nothing leaks to the launcher
         }
 
         void onPaint(artboard::IRenderTarget &t) const override
@@ -64,6 +73,7 @@ namespace androidshell
             const double ph = H - 2 * margin < 560.0 ? H - 2 * margin : 560.0;
             const double py = margin - (1.0 - e) * (ph + margin);
 
+            mPanelRect = {px, py, pw, ph};
             artboard::drawElevation(t, {px, py, pw, ph}, shape::kRadiusXL, 6.0);
             artboard::drawRoundedRect(t, {px, py, pw, ph}, shape::kRadiusXL,
                                       artboard::Paint::filled(c.surfaceContainerLow));
@@ -190,6 +200,8 @@ namespace androidshell
         }
 
         mutable std::vector<artboard::Rect> mTileRects;
+
+        mutable artboard::Rect mPanelRect{0, 0, 0, 0};  // last painted panel, for the scrim hit-test
     };
 
 } // namespace androidshell
