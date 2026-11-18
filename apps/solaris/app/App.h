@@ -54,6 +54,10 @@ namespace solaris_ui
         /** The window's PHYSICAL size. Divided by the drawn UI scale into the LOGICAL size every widget lays out in
          *  (R-ACCESS-1, cosmo R-SCALE-2), so nothing below this call knows a scale exists. */
         void setSize(double width, double height);
+        /** R-HOST-2: where the window's top-left is in the target, in device pixels — (0, 0) for a window of its own; the
+         *  frame another app gives it when that app hosts Solaris (Interstellar's Song page). Every pointer is read from
+         *  it and everything is drawn from it; the host clips to the frame. */
+        void setOrigin(double x, double y) { mOx = x; mOy = y; }
         /** R-ACCESS-1: the shell drawn at the model's `settings.uiScale`, EASED — every frame the logical size is the
          *  window's divided by the drawn scale and every pointer is divided by it, so the shell zooms, never a cut then
          *  a reflow (cosmo's kScaleAnimMs). High contrast likewise: one eased amount on cosmo's tokens. */
@@ -236,7 +240,11 @@ namespace solaris_ui
         artboard::AnimatedProperty mScale{1.0}, mContrast{0.0};
         int mScaleWant = -1, mContrastWant = -1;
         void applyLogicalSize();
-        artboard::Transform rootTransform() const { return artboard::Transform::scaling(mScale.value(), mScale.value()); }
+        artboard::Transform rootTransform() const
+        {
+            return artboard::Transform::translation(mOx, mOy).mul(artboard::Transform::scaling(mScale.value(), mScale.value()));
+        }
+        double mOx = 0.0, mOy = 0.0; // R-HOST-2: the frame's top-left, device pixels
         int mSyncSeen = 0;                          // the syncs a toast has said
         std::shared_ptr<cosmo_v2::ConfirmDialog> mConfirm;
         std::shared_ptr<cosmo_v2::ContextMenu> mMenu;  // cosmo's: a route, an effect, rename — modal while open

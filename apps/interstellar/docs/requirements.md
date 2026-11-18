@@ -1015,6 +1015,125 @@ cut sample-exact, gains, fades, mute, solo, pan, a range, 29.97 exact, PNG silen
 the sound a render carries`. Mutants run red: per-frame sample counts rounded (drift), mute
 ignored, fades ignored, the stream never added.
 
+### DR-SONG-1 A Solaris song as a whole project: hosted, played live by Solaris's engine, edited and saved in place (R-SONG-1…6, R-SONG-8)
+**The adapter.** `interstellar_song` (`song/SongHost.{h,cpp}`) is the only target of the core that sees Solaris: it
+links `solaris_core` PRIVATE, so Solaris's `AppModel.h`/`Command.h`/`Event.h`/`Json.h` never meet Interstellar's of
+the same names (Solaris's `AppModel` is named in `SongHost.h` only by a forward declaration; Interstellar's
+`AudioOut.h` is included by path, `SongHost.cpp:7`). A `SongHost` owns a real `SolarisService` with the song open —
+no settings, recents, presets or plugin paths, so hosting a song changes nothing of the machine's Solaris. Its host
+decodes samples through Interstellar's `IAudioSource` and plays its own transport (the Song page's) through
+Interstellar's `IAudioOut` (`OutBridge`, `:36`). `run` is `dispatchText` (Solaris's grammar, refusals, history);
+`save` is `project save`; `pump` is Solaris's pump (its transport, its meters, its file watch, R-COLLAB-1).
+`factsOf` (`:182`) reads another version's sections, lanes and length from a copy of the service with that version
+open; `span` (`:230`) is a clip's length in it — the whole song, or a section by id then name, refusals naming what
+the song has. `fingerprint` hashes `serializeProject` (every version's text); `revision` is the hosted model's.
+`program` (`:250`) asks Solaris for the version compiled (`compileVersion`, Solaris DR-HOST-1) and keeps the graph
+with the span's start and stop in song samples — a section stops exactly at its end, the whole song rings on ten
+seconds as `render` lets it. `stream` (`:352`) builds an engine from a program on the CALLING thread; the stream
+(`LiveStream`, `:275`) renders in `render`'s 4096-frame chunks from wherever it was last sought, drops the output
+latency, and serves reads of any size from that buffer — so its samples are `render`'s; a read behind its buffer or
+more than a chunk past it seeks the engine (instruments silent from there, as Solaris's seek). Solaris's model
+gained what this needs and a beat cannot give without the tempo map: `markers[].seconds/endSeconds` and
+`lengthSeconds` (Solaris `ServiceModel.cpp`).
+
+**The service.** `core/service/ServiceSong.{h,cpp}`. A song clip is an `#aclip` whose `src` is a `.slp`
+(`isSongSrc`), with `version=` and `section=` (`model/Schema.h`; `""` = main / the whole song). The songs are
+`SongState::slots`, by absolute path, the UI thread's, each with a `gen` bumped whenever its fingerprint moves
+(`looked`, `ServiceSong.cpp:266`: looked at when the hosted revision moved — at once after a `song run`, four
+times a second otherwise, since a playing song moves its revision every pump). `songMedia` (`:209`) gives a want
+(path|version|section) its media: compiled anew when the song's `gen` moved since — `song:<n>`, filed in
+`SongState::programs` under `mu` (the one thing that crosses threads) — or `""` and `song.failed` said once per
+`gen` with Solaris's reason. `songSource` (`:246`) builds a stream from the media's program on the reader's own
+thread (the player's, a delivery's) and reads it as a file (`LiveSource`, `:74` — at another rate through a
+Catmull-Rom cubic over a short history). `pumpSongs` (`:282`) hosts every song clip's song, pumps each, and on a
+change it did not make says `song.changed what=synced`; any change bumps the project revision, so the player's plan
+names the new program (`syncSoundPlan`) and the edit is heard from its next block. Readers: `planAudioIn` gives a
+song clip its media (`ServiceAudio.cpp:68`); `audioSourceIn` opens `song:` media live (`:129`); a song clip asks
+for no waveform (`:358`). `fillSongModel` (`:312`) fills `songs[]` and, per song clip, its media, `songError` and
+`songLanes` — its version's lanes from `factsOf`, cached per `gen`, moved to the clip's source time and cut to its
+span. Commands (`songCommand`, `:419`): `song open` hosts; `song import` validates through `span`, makes an
+`#atrack` named after the song unless `--track` names one, and places the clip at `--at` with `out` = the span
+(frame-snapped); `song run <song> <line>` (the rest of the line kept raw — `CommandSpec::rawTail`) saves the song
+in place on a bare `project save` (`:513`), refuses `project open|new|close|save <elsewhere>`, `render`, `export`
+and `quit` each with why, runs the line, prints Solaris's output and event lines, and on a change says
+`song.changed what=edited` and bumps the revision; `song save [song]` writes one, or every edited one.
+`set <aclip>.version|section` goes through `songSelection` (`:399`): refused unless the song has it; the clip then
+covers what it chose from its start. `audio clip add --src x.slp` is refused, pointing at `song import`.
+`project save` saves every edited song first; `project close` drops them (`closeSongs`). Nothing waits for a song:
+`busy()`, `wait` and a delivery render know nothing of it. `songHost(<song>)` (`:202`) is the host's handle for the
+Song page (DR-SONG-2). The model: `songs[]` (name, path, src, dirty, bpm, seconds, open, versions, sections with
+seconds, error), `songsDirty`, and per clip `song`, `version`, `section`, `songLanes`, `songError`; `unsaved(m)` =
+`dirty || songsDirty` is what the dot, the title and the close prompt read. A build without Solaris keeps the
+grammar and says "this build hosts no Solaris song".
+
+**The clip, drawn** (R-SONG-8). The Cut timeline draws a song clip's lanes over the lower two thirds of its body,
+one row a lane, each of its clips a block in the foreground at 30% (`app/widgets/Timeline.cpp:1101`); a new
+picture after an edit cross-fades over the old one in 200 ms (`:784`), placed whole the first time. A clip whose
+version and section cannot be compiled is hatched.
+
+Tests: `interstellar_service_l2` — `a song is played LIVE by Solaris's engine, read in any block size, and is what
+solaris-cc renders` (`core/tests/serviceL2Tests.cpp:569`): a song made with Solaris's own grammar (drums, two
+sections, a version muting them); its Drop program, read in blocks of 1000, 333, 4097, 1, 8192 and 777 frames,
+equals the WAV `solaris-cc render --from 4 --to 8 --bits 32f` writes BIT FOR BIT, is silent past its end, and two
+streams of one program are two engines. `a Solaris song is placed as its version and section, shows its lanes, and
+sounds as Solaris renders it` (`:605`): placed as its Drop at 1 s the clip is 2.000 s with a media at once; its one
+lane spans 0–2 s; the delivery from 1 s to 3 s equals solaris-cc's WAV within 1e-6 and is silent outside; the
+NoDrums version is silent; refusals name what the song has; the song file is byte-identical after all of it. `a
+song at another rate is played at the project's, resampled` (`:646`): a 44.1 kHz song in a 48 kHz delivery sounds
+at the level of Solaris's own 48 kHz render, within 5%. `a song edited here is heard at once, makes the project
+unsaved, and is saved to its own file` (`:669`): `song run s set ch_2.gain=-12` gives the clip a new media and the
+next delivery is −12 dB (peak ratio within 1%), with no wait; `songsDirty` and `unsaved` with `dirty` false;
+refusals (`project open`, `project save --as`, `render`, an unknown verb, an unknown song); `song run <clip> undo`
+gives back the exact samples; `song run s project save` writes the `.slp` in place; `project save` writes the next
+edit into it; `songHost` finds the song by name and by clip; undoing the import removes the clip. Mutant seen red:
+`songMedia` keeping a program after its song moved (the edit test fails on the media). `interstellar_service_tests`
+writes and documents `clips[].songLanes` and `songError`. `interstellar_app_ui_tests` `testSongUi`: the title's `*`
+from an edited song alone, File ▸ Import Song…'s line, the clip menu's rows (Edit Song, Open in Solaris), marks,
+section times and the lines it dispatches.
+**Not verified:** a VST3 plugin in a hosted song plays offline (no plugin paths are given to the hosted song —
+silent or dry, said by Solaris). Two hosted songs at different sample rates build engines at two rates on two
+threads, and Solaris's DSP library keeps ONE process-wide rate (`AudioConfig`, R-NFR-7): the second build can
+re-tune the first's devices. Not seen in a test; one rate per project's songs is the safe case.
+
+### DR-SONG-2 The Song page: Solaris's own window inside Interstellar (R-SONG-7)
+**The seam.** `app/widgets/EmbeddedView.h`: another app's window as the front end sees it — paint into a frame given
+in device pixels, the pointer, the wheel and the keys relative to it, a cursor name, a title, `hidden()` — with no
+type of that app and no service in it. The host makes one per song through `AppHooks::songView`; the App asks once
+per song and keeps it (a null too). **The bridge** `interstellar_song_ui` (`song/SongView.{h,cpp}`) links
+`solaris_app` PRIVATE, so Solaris's `App.h`/`Theme.h`/`AppHooks.h` never meet Interstellar's: `makeSongView(host,
+hooks)` builds Solaris's `App` over the hosted service's model (`SongHost::model`), its dispatch sending every
+line back through the host as `song run <song> <line>` — except Solaris's `project close` (its Home), which is
+`onBack`. Each call into it runs inside `SolarisColours` (Solaris's accent installed, Interstellar's accent,
+contrast and reduced motion put back after), and its paint sets Solaris's origin to the frame (Solaris DR-HOST-1).
+Only the GTK window and the live shots link it; the core, the CLI and their tests never see a widget.
+
+**The page.** `EditScreen::Tab::Song` = 3 (`app/widgets/EditScreen.h:59`), the switcher's fourth label, key 4 and
+View ▸ Song; its FadePage is last among the pages and its `SongPage` (`app/widgets/SongPage.{h,cpp}`) paints opaque
+over the monitor. `SongPage::deviceFrame` is its world rect times the App's drawn scale (`App.cpp:1838`); its paint
+clips to it and hands it to the view; without one it says there is no song (and offers Import Song…), or how to open
+one, or that the build has no Solaris window. `App::openSong` (`App.cpp:1206`) shows a song's view (the first hosted
+when none is named), pauses Interstellar's transport, and opens the tab; `openSongOfClip` (`:1229`) finds a song
+clip's song — the Cut timeline's double-click on a song clip (`Timeline.cpp:665`) and the clip menu's Edit Song
+(`:1053`) come here. `songViewUp` (`:1243`) is the view when the Song tab is up and nothing of Interstellar's (a
+modal, a menu, the version list) is over it; then `pointer` (`:1311`) gives it what lands in the frame, at frame
+pixels, and a press that began there until its release; `wheel` likewise; `key` offers it every key first
+(`:1384`). `cursorName` is the view's inside the frame (the GTK host shows it, `linux_main.cpp:124`). Leaving the
+tab calls `hidden()`: the bridge stops a playing transport. The GTK host binds `songView` (`linux_main.cpp:557`):
+`SongHost` from `songHost(<song>)`, `song run <song> …` for its lines, the host's file picker and clipboard.
+
+Tests: `interstellar_app_ui_tests` `testSongPage` (`app/tests/ui/uiTests.cpp:2605`) over a stand-in view: a
+song clip's lanes placed whole; a double-click on it opens the Song tab and asks the host once; the view paints in
+the page's frame (below the 29-px top bar, the whole body); a click in the frame reaches it at frame pixels and
+the cursor is its; a press dragged out over the top bar is still its until released; the top bar's own hover is
+Interstellar's; Space goes to it, not to Interstellar's play; leaving the tab calls `hidden()` and the page fades
+out; key 4 brings back the same view. `testSongPageEmpty` (`:2675`): the empty page's sentence, and its button's
+`song import`. `interstellar_live` (`tests/liveShots.cpp:233`, the real app over the real service with the bridge
+bound as the GTK host binds it, a song made by `solaris-cc`): the Cut shot with the song clip's lanes; the Song
+page opened by its clip, Solaris's real window drawn; Solaris's accent #DD5A0C found inside the frame (31 samples)
+and nowhere outside it; Ctrl+S pressed on the page saves the song through Solaris's keymap and `song run`.
+**Not verified:** the live GTK window (L5) — a real hand on Solaris's window inside Interstellar's (its dock drag,
+its piano roll, its device windows), its transport through the sound server, its cursors.
+
 ### DR-AUD-1 The suite audio schema parses and round-trips; Interstellar places clips (R-AUD-2, R-AUD-4)
 `#atrack` / `#aclip` are typed (`model/Project.h`); `#note`, `#arack`, `#aeffect`, `#aauto`,
 `#asend` are kept as `RawNode` and preserved byte-exact. `audio track add` and `audio clip add`

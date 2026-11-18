@@ -55,7 +55,10 @@ namespace interstellar
             SettingsChanged,    // the key=value pairs that changed
             PresetsChanged,     // count
             CacheChanged,       // timeline, frames, total, building
-            KeysChanged         // address, keys
+            KeysChanged,        // address, keys
+            SongOpened,         // song, path, versions, sections — R-SONG
+            SongChanged,        // song, what (edited | saved | synced), line
+            SongFailed          // song, version, section, why
         };
 
         Kind kind = Kind::Info;

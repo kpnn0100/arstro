@@ -17,6 +17,9 @@
 #include "Project.h"
 #include "Versions.h"
 #include "core/ThreadBudget.h"
+#if INTERSTELLAR_HAVE_SONG
+#include "SongHost.h"   // R-SONG: the reference — Solaris's own render of the same song, made apart from the service
+#endif
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -504,6 +507,225 @@ int main()
         const std::string after((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         assert(after == text);
     });
+
+    test("`song run` keeps the rest of the line as Solaris wrote it (R-SONG-4)", [] {
+        std::string err;
+        const Command c = parseCommand("song run \"my song\" set ch_2.gain=-3 --x \"a b\"  ", err);
+        assert(err.empty() && c.kind == Command::Kind::SongRun && c.args.size() == 2);
+        assert(c.args[0] == "my song" && c.args[1] == "set ch_2.gain=-3 --x \"a b\"");   // its flags are not ours
+        assert(formatCommand(c) == "song run \"my song\" set ch_2.gain=-3 --x \"a b\"");
+        assert(parseCommand("song run trap", err).kind == Command::Kind::None && has(err, "too few"));
+    });
+
+#if INTERSTELLAR_HAVE_SONG
+    // R-SONG: a song made with Solaris's own grammar — drums on a kick, two sections, a version without them
+    auto makeSong = [](const std::string &path) {
+        SongHost h(SongHost::Decode{});
+        std::string out, err;
+        std::vector<std::string> ev;
+        for (const std::string line : {"project new \"" + path + "\" --bpm 120", std::string("clip add --instrument drums --at 0 --length 8"),
+                                       std::string("pattern steps pt_1 --pitch kick \"x...x.x.x...x..x\""),
+                                       std::string("marker add Verse --at 0 --length 4"), std::string("marker add Drop --at 4 --length 4"),
+                                       std::string("version new NoDrums --open"), std::string("set ch_2.mute=1"), std::string("version open main"),
+                                       std::string("project save")})
+            if (!h.run(line, out, ev, err)) { std::fprintf(stderr, "  song: %s → %s\n", line.c_str(), err.c_str()); assert(false); }
+    };
+    // Solaris's render of it, made apart from the service: what `solaris-cc render` writes — what a song clip must sound like
+    struct Wav { long long frames = 0; std::vector<float> stereo; };
+    auto reference = [](const std::string &dir, const std::string &song, const std::string &range, int rate) {
+        Wav w;
+#ifdef SOLARIS_CC
+        const std::string wav = dir + "/ref.wav";
+        const std::string cmd = std::string("XDG_CONFIG_HOME=\"") + dir + "\" XDG_DATA_HOME=\"" + dir + "\" \"" SOLARIS_CC "\" project open \"" + song +
+                                "\" : render --out \"" + wav + "\" --bits 32f --rate " + std::to_string(rate) + range + " > /dev/null";
+        assert(std::system(cmd.c_str()) == 0);
+        std::ifstream in(wav, std::ios::binary);
+        const std::string b((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        const size_t data = b.find("data");
+        assert(b.compare(0, 4, "RIFF") == 0 && data != std::string::npos);
+        uint32_t bytes = 0;
+        std::memcpy(&bytes, b.data() + data + 4, 4);
+        w.stereo.resize(bytes / 4);
+        std::memcpy(w.stereo.data(), b.data() + data + 8, bytes);
+        w.frames = (long long)w.stereo.size() / 2;
+#else
+        (void)dir; (void)song; (void)range; (void)rate;
+        std::fprintf(stderr, "  (no solaris-cc in this build: the reference is skipped)\n");
+#endif
+        return w;
+    };
+    auto peakOf = [](const std::vector<float> &v, size_t from, size_t to) {
+        float p = 0;
+        for (size_t i = from; i < to && i < v.size(); ++i) p = std::max(p, std::fabs(v[i]));
+        return p;
+    };
+    auto rmsOf = [](const std::vector<float> &v, size_t from, size_t to) {
+        double s = 0;
+        size_t n = 0;
+        for (size_t i = from; i < to && i < v.size(); ++i, ++n) s += (double)v[i] * v[i];
+        return n ? std::sqrt(s / n) : 0.0;
+    };
+
+    test("a song is played LIVE by Solaris's engine, read in any block size, and is what solaris-cc renders (R-SONG-2)", [&] {
+        Fixture f("songlive");
+        makeSong(f.path("s.slp"));
+        const Wav ref = reference(f.dir, f.path("s.slp"), " --from 4 --to 8", 48000);   // Drop = beats 4–8
+        SongHost h(SongHost::Decode{});
+        std::string err;
+        assert(h.open(f.path("s.slp"), err));
+        auto p = h.program("", "Drop", err);
+        assert(p);
+        // the stream, read the way a mixer reads — blocks of any size, none aligned to the engine's own
+        auto s = SongHost::stream(p, err);
+        assert(s && s->rate() == 48000 && s->seconds() == 2.0);
+        std::vector<float> got((size_t)96000 * 2, 0.0f);
+        const int sizes[] = {1000, 333, 4097, 1, 8192, 777};
+        for (long long at = 0, k = 0; at < 96000; ++k)
+        {
+            const int n = (int)std::min<long long>(sizes[k % 6], 96000 - at);
+            s->read(at, n, got.data() + (size_t)at * 2);
+            at += n;
+        }
+        assert(peakOf(got, 0, got.size()) > 0.05);                         // it sounds
+        std::vector<float> past(64, 1.0f);
+        s->read(96000, 32, past.data());
+        assert(peakOf(past, 0, past.size()) == 0.0f);                      // a section stops at its end, as `render --to` does
+        if (ref.frames)
+        {
+            assert(ref.frames == 96000);
+            assert(got == ref.stereo);                                     // bit for bit: Solaris's own samples
+        }
+        // two streams of one program are two engines: reading one does not move the other
+        auto s2 = SongHost::stream(p, err);
+        std::vector<float> again((size_t)96000 * 2);
+        s2->read(0, 96000, again.data());
+        assert(again == got);
+    });
+
+    test("a Solaris song is placed as its version and section, shows its lanes, and sounds as Solaris renders it (R-SONG-1/2/3/8)", [&] {
+        Fixture f("song");
+        makeSong(f.path("s.slp"));
+        const std::string before = [&] { std::ifstream in(f.path("s.slp")); return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()); }();
+        f.standard();                                                              // pictures 0–4 s, no sound of their own
+        f.must("song import \"" + f.path("s.slp") + "\" --section Drop --at 1");
+        const AppModel &m = f.svc->model();
+        const ClipModel *c = nullptr;
+        for (const auto &x : m.clips) if (x.song) c = &x;
+        assert(c && c->section == "Drop" && c->version.empty() && c->at == 1.0 && c->out == 2.0);   // 4 beats at 120: two seconds
+        assert(has(c->media, "song:") && c->songError.empty());                    // a program, compiled now — nothing to wait for
+        // R-SONG-8: the lanes it draws — the drum lane's clip (beats 0–8, 0–4 s) cut to the Drop (2–4 s) it plays
+        assert(c->songLanes.size() == 1 && c->songLanes[0].spans.size() == 1);
+        assert(c->songLanes[0].spans[0].first == 0.0 && c->songLanes[0].spans[0].second == 2.0);
+        assert(m.songs.size() == 1 && m.songs[0].name == "s" && m.songs[0].versions.size() == 2 && m.songs[0].versions[1].name == "NoDrums");
+        assert(m.songs[0].sections.size() == 2 && m.songs[0].sections[1].name == "Drop" && m.songs[0].sections[1].from == 2.0 && m.songs[0].sections[1].to == 4.0);
+        // the delivery carries Solaris's samples, where the clip is — nothing else sounds
+        f.must("render --timeline main --format h264 --res 46x26 --out \"" + f.path("m.mp4") + "\"");
+        assert(gAudio.size() == 96 * 2000 * 2);
+        const Wav ref = reference(f.dir, f.path("s.slp"), " --from 4 --to 8", 48000);
+        if (ref.frames)
+        {
+            double worst = 0;
+            for (size_t i = 0; i < (size_t)ref.frames * 2; ++i) worst = std::max(worst, (double)std::fabs(gAudio[48000 * 2 + i] - ref.stereo[i]));
+            assert(worst < 1e-6);
+        }
+        assert(peakOf(gAudio, 48000 * 2, 144000 * 2) > 0.05);
+        assert(peakOf(gAudio, 0, 48000 * 2) == 0.0f && peakOf(gAudio, 144000 * 2, gAudio.size()) == 0.0f);   // before 1 s, after 3 s: silence
+        // another version: the one without the drums is silent; what the song lacks is refused, naming what it has
+        f.must("set " + c->id + ".version=NoDrums");
+        f.must("render --timeline main --format h264 --res 46x26 --out \"" + f.path("m2.mp4") + "\"");
+        assert(peakOf(gAudio, 0, gAudio.size()) == 0.0f);
+        std::string err;
+        assert(!f.run("set " + f.svc->model().clips.back().id + ".version=Nope", &err) && has(err, "main, NoDrums"));
+        assert(!f.run("set " + f.svc->model().clips.back().id + ".section=Bridge", &err) && has(err, "Verse") && has(err, "Drop"));
+        assert(!f.run("audio clip add --track a0 --src \"" + f.path("s.slp") + "\"", &err) && has(err, "song import"));
+        // and placing a song never wrote it
+        std::ifstream in(f.path("s.slp"));
+        assert(std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()) == before);
+    });
+
+    test("a song at another rate is played at the project's, resampled (R-SONG-2)", [&] {
+        Fixture f("songrate");
+        {
+            SongHost h(SongHost::Decode{});
+            std::string out, err;
+            std::vector<std::string> ev;
+            for (const std::string line : {"project new \"" + f.path("r.slp") + "\" --bpm 120 --rate 44100", std::string("clip add --instrument drums --at 0 --length 8"),
+                                           std::string("pattern steps pt_1 --pitch kick \"x...x.x.x...x..x\""), std::string("project save")})
+                if (!h.run(line, out, ev, err)) { std::fprintf(stderr, "  song: %s → %s\n", line.c_str(), err.c_str()); assert(false); }
+        }
+        f.standard();
+        f.must("song import \"" + f.path("r.slp") + "\" --at 0");
+        f.must("render --timeline main --format h264 --res 46x26 --out \"" + f.path("m.mp4") + "\"");
+        const Wav ref = reference(f.dir, f.path("r.slp"), "", 48000);            // Solaris rendering it AT 48 kHz itself
+        assert(peakOf(gAudio, 0, 192000 * 2) > 0.05);
+        if (ref.frames)
+        {
+            // not the same samples (a 44.1 kHz engine resampled is not a 48 kHz engine), the same sound: its level within 5%
+            const double a = rmsOf(gAudio, 0, 192000 * 2), b = rmsOf(ref.stereo, 0, 192000 * 2);
+            assert(std::fabs(a / b - 1.0) < 0.05);
+        }
+    });
+
+    test("a song edited here is heard at once, makes the project unsaved, and is saved to its own file (R-SONG-4/5)", [&] {
+        Fixture f("songedit");
+        makeSong(f.path("s.slp"));
+        f.standard();
+        f.must("song import \"" + f.path("s.slp") + "\" --at 0");                 // the whole song: 8 beats, 4 s
+        const NodeId clip = f.svc->model().clips.back().id;
+        assert(f.svc->model().clips.back().out == 4.0);
+        f.must("render --timeline main --format h264 --res 46x26 --out \"" + f.path("a.mp4") + "\"");
+        const std::vector<float> loud = gAudio;
+        const std::string mediaBefore = f.svc->model().clips.back().media;
+        f.must("project save");
+        assert(!unsaved(f.svc->model()));
+        // an edit is a Solaris line, by the song's name or by its clip; Solaris's refusal is Solaris's
+        f.events.clear();
+        f.must("song run s set ch_2.gain=-12");
+        assert(has(f.svc->output(), "params.changed"));
+        bool said = false;
+        for (const auto &e : f.events) said = said || has(e, "song.changed song=s what=edited line=\"set ch_2.gain=-12\"");
+        assert(said && f.svc->model().songsDirty && unsaved(f.svc->model()) && !f.svc->model().dirty);
+        assert(f.svc->model().clips.back().media != mediaBefore);                 // a new program, made by the edit
+        f.must("render --timeline main --format h264 --res 46x26 --out \"" + f.path("b.mp4") + "\"");   // no wait: nothing renders
+        const double ratio = peakOf(gAudio, 0, gAudio.size()) / peakOf(loud, 0, loud.size());
+        assert(std::fabs(ratio - std::pow(10.0, -12.0 / 20.0)) < 0.01);           // the edit is heard, at its gain
+        std::string err;
+        assert(!f.run("song run s project open x.slp", &err) && has(err, "swap"));
+        assert(!f.run("song run s project save --as y.slp", &err) && has(err, "own file"));
+        assert(!f.run("song run s render --out z.wav", &err) && has(err, "live"));
+        assert(!f.run("song run s frobnicate", &err) && has(err, "unknown"));
+        assert(!f.run("song run nosuch set ch_2.gain=0", &err) && has(err, "no hosted song"));
+        // the song's own history: undo there, and the sound is the song's before
+        f.must("song run " + clip + " undo");
+        f.must("render --timeline main --format h264 --res 46x26 --out \"" + f.path("c.mp4") + "\"");
+        assert(gAudio == loud);
+        f.must("song run s set ch_2.gain=-6");
+        // the Song page's Ctrl+S: Solaris's `project save`, the song's own file in place (not the .isp)
+        f.must("song run s project save");
+        assert(!f.svc->model().songsDirty);
+        {
+            std::ifstream in(f.path("s.slp"));
+            const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            assert(has(text, "id=ch_2") && has(text, "gain=-6.0") && has(text, "app        = solaris"));
+        }
+        f.must("song run s set ch_2.gain=-3");
+        // `project save` writes the song to ITS file, then the .isp
+        f.must("project save");
+        assert(!unsaved(f.svc->model()));
+        std::ifstream in(f.path("s.slp"));
+        const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        assert(has(text, "id=ch_2") && has(text, "gain=-3.0"));
+        std::ifstream isp(f.path("mv.isp"));
+        const std::string ispText((std::istreambuf_iterator<char>(isp)), std::istreambuf_iterator<char>());
+        assert(has(ispText, "src=s.slp") && !has(ispText, "arstro-project = 1\napp        = solaris"));
+        // the host's handle on the song — what the Song page draws Solaris's window from
+        SongHost *sh = f.svc->songHost("s");
+        assert(sh && sh == f.svc->songHost(clip) && sh->path() == f.path("s.slp") && !f.svc->songHost("nosuch"));
+        // undoing the import takes the clip away (Interstellar's history), and leaves the song file alone
+        f.must("undo");
+        for (const auto &x : f.svc->model().clips) assert(!x.song);
+    });
+#endif
 
     test("a version's colour is an OVERRIDE: a delta that keeps receiving the base (R-VER-2)", [] {
         Fixture f("override");

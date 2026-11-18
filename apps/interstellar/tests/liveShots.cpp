@@ -8,7 +8,11 @@
  *  it fails unless the project reaches the Edit screen, the rack lists its sources, the monitor
  *  received a composited frame, and every shot has content.
  *
- *      interstellar_live_shots --project mv.isp --outdir shots [--size 1440x900] [--select <bind>]
+ *      interstellar_live_shots --project mv.isp --outdir shots [--size 1440x900] [--select <bind>] [--song s.slp]
+ *
+ *  With --song (R-SONG-7): the song is imported and opened on the Song page — Solaris's REAL window, bound
+ *  as the GTK host binds it — and the shot must show Solaris's accent inside the page's frame and only there,
+ *  and a key pressed there must reach Solaris's keymap and come back as Interstellar's `song run`.
  */
 #ifdef NDEBUG
 #undef NDEBUG
@@ -25,6 +29,9 @@
 #include "VideoFrameDecoder.h"
 #include "adapter/native/CairoTarget.h"
 #include "core/ThreadBudget.h"
+#if INTERSTELLAR_HAVE_SONG_UI
+#include "SongView.h"
+#endif
 #include <cairo/cairo.h>
 #include <chrono>
 #include <cstdio>
@@ -43,7 +50,7 @@ using arstro::interstellar_v1::AppHooks;
 
 int main(int argc, char **argv)
 {
-    std::string project, outdir = ".", select;
+    std::string project, outdir = ".", select, song;
     int w = 1440, h = 900;
     bool timing = false;   // --time 1: print the slowest frames of the open (D-6)
     for (int i = 1; i + 1 < argc; i += 2)
@@ -54,6 +61,7 @@ int main(int argc, char **argv)
         else if (k == "--select") select = v;
         else if (k == "--size") std::sscanf(v.c_str(), "%dx%d", &w, &h);
         else if (k == "--time") timing = v == "1";
+        else if (k == "--song") song = v;
     }
     if (project.empty()) { std::fprintf(stderr, "usage: interstellar_live_shots --project <p.isp> --outdir <d>\n"); return 2; }
     std::filesystem::create_directories(outdir);
@@ -102,6 +110,18 @@ int main(int argc, char **argv)
         if (ok && !out.empty()) ++sourceFrames;
         return ok;
     };
+#if INTERSTELLAR_HAVE_SONG_UI
+    // R-SONG-7: exactly as linux_main.cpp binds it — the hosted song's own Solaris window, its lines as `song run`
+    bool backed = false;
+    hooks.songView = [&](const std::string &name) -> std::shared_ptr<interstellar_v1::EmbeddedView> {
+        SongHost *h = svc.songHost(name);
+        if (!h) return nullptr;
+        SongViewHooks k;
+        k.dispatch = [&svc, name](const std::string &line, std::string &err) { return svc.dispatchText("song run \"" + name + "\" " + line, err); };
+        k.onBack = [&backed] { backed = true; };
+        return makeSongView(*h, k);
+    };
+#endif
     App app(hooks, w, h);
 
     cairo_surface_t *surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
@@ -206,6 +226,55 @@ int main(int argc, char **argv)
     std::printf("frames served to the monitor: %d; rack nodes: %zu; screen: edit\n", framesServed,
                 svc.model().rack.size());
     assert(framesServed > 0);   // the composited frame reached the monitor through the hook
+
+#if INTERSTELLAR_HAVE_SONG_UI
+    if (!song.empty())
+    {
+        // R-SONG-7: a song as a whole project, on the Song page — Solaris's own window, inside Interstellar's
+        assert(app.dispatch("song import \"" + song + "\" --at 0"));
+        std::string clip;
+        for (const auto &c : svc.model().clips) if (c.song) clip = c.id;
+        assert(!clip.empty());
+        app.setTab(1);
+        settle(400.0);
+        shot("song_clip");   // the clip draws the song's lanes, not a wave (R-SONG-8)
+        app.openSongOfClip(clip);
+        settle(900.0);
+        assert(app.tab() == interstellar_v1::EditScreen::Song && app.edit().songPage()->view());
+        shot("song");
+        // Solaris's accent (#DD5A0C) inside the page's frame, and only there: Interstellar's chrome keeps its own
+        const artboard::Rect f = app.edit().songPage()->deviceFrame();
+        const unsigned char *px = cairo_image_surface_get_data(surf);
+        const int stride = cairo_image_surface_get_stride(surf);
+        int inside = 0, outside = 0;
+        for (int y = 0; y < h; y += 2)
+            for (int x = 0; x < w; x += 2)
+            {
+                const unsigned char *p = px + (size_t)y * stride + (size_t)x * 4;   // BGRA
+                const bool orange = std::abs(p[2] - 0xDD) < 24 && std::abs(p[1] - 0x5A) < 24 && std::abs(p[0] - 0x0C) < 24;
+                if (!orange) continue;
+                if (f.contains(artboard::Point{(double)x, (double)y})) ++inside; else ++outside;
+            }
+        std::printf("song page: frame %.0f,%.0f %.0fx%.0f; Solaris's accent inside %d, outside %d\n", f.x, f.y, f.w, f.h, inside, outside);
+        assert(f.y > 0 && f.h > 0 && inside > 0 && outside == 0);
+        // a key on the page is Solaris's: its Ctrl+S is the song's own save, through Interstellar's `song run`
+        std::string sname;
+        for (const auto &g : svc.model().songs) sname = g.name;
+        std::string err;
+        assert(svc.dispatchText("song run \"" + sname + "\" set ch_2.gain=-2", err));
+        settle(100.0);
+        assert(svc.model().songsDirty);
+        artboard::KeyEvent ks;
+        ks.type = artboard::KeyEvent::Type::Down;
+        ks.keyCode = 'S';
+        ks.ctrl = true;
+        app.key(ks);
+        settle(100.0);
+        assert(!svc.model().songsDirty);   // saved to its own file, by Solaris's keymap
+        std::printf("song page: Ctrl+S in Solaris's window saved %s\n", sname.c_str());
+        (void)backed;
+    }
+#endif
 
     cairo_destroy(cr);
     cairo_surface_destroy(surf);

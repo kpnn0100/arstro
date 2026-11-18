@@ -11,7 +11,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Defects: [`DEFECTS.md`](DEFECTS.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-11-17 — the family standard adopted: menus, toast, unsaved dialog and dot, empty states, Home, words (R-UI-21, R-UI-7 amended; DR-UI-7, DR-UI-18).*
+*Last updated: 2026-11-18 — a Solaris song as a whole DAW project: played live, edited in Solaris's own window on the Song page, saved in place (R-SONG amended; DR-SONG-1, DR-SONG-2).*
 
 ---
 
@@ -43,11 +43,27 @@ native app; NOT committed (the tree holds other sessions' work).**
 - `[x]` **R-RACK-1a** a `.cmp` opens directly as an unsaved project around it; the picker lists
   `.cmp`; `project.opened from=`; API document regenerated. L2 tests green.
 - `[x]` **D-19** a `.slp` is refused instead of half-opened and rewritten on save.
-- `[ ]` **R-SONG** (not written yet as requirements): host a `SolarisService` through one adapter
-  library. Step 1 = render-only (`audio clip add --src song.slp[#v=<version>]`, proof: samples
-  equal `solaris-cc render`); then `#song` node + `project open x.slp`; then `song <line>`
-  pass-through with direct save; then `song branch <name>` (a Solaris `#aversion`). Build order and
-  the header-name clash between the two models are the known obstacles.
+- `[x]` **R-SONG** (2026-11-18, the founder: *"import solaris project and select arrangement plus
+  version as an audio track and can edit directly + save directly"*): `song open | import | run |
+  save`, `<aclip>.version|section`, `wait song.rendered`; the hosted `SolarisService` in its own
+  library (`interstellar_song`, the header clash solved by linking Solaris PRIVATE); Solaris before
+  Interstellar in the root CMake; renders on one worker, bit for bit `solaris-cc render`'s; File ▸
+  Import Song…, the song clip's menu (version, section, Save Song, Edit in Solaris). DR-SONG-1.
+  L2 + UI tests green; mutant seen red.
+- `[x]` **R-SONG amended** (2026-11-18, the founder: *"it not import as a wave, it should be import as
+  entire daw project, like a mini solaris inside interstellar"*): the clip plays the song LIVE through
+  Solaris's engine (`SongHost::program`/`stream`, Solaris `compileVersion` R-HOST-1) — no render, no
+  wait; `wait song.rendered`, `song.rendered`, `songWaiting`, `rendering` gone; the Song page (R-SONG-7):
+  Edit's fourth tab, Solaris's OWN window (`interstellar_song_ui`, Solaris `App::setOrigin` R-HOST-2)
+  over the hosted song, its lines as `song run`, double-click a song clip to open it; the clip draws the
+  song's lanes (R-SONG-8). DR-SONG-1/2. L2 (bit for bit with `solaris-cc render`, any block size),
+  UI (692 checks) and the live shots (Solaris's real window in Interstellar's frame) green; mutant seen red.
+- `[!]` UNVERIFIED: R-SONG in the live GTK window (L5) — the picker, a hand on Solaris's window inside
+  Interstellar's (dock, piano roll, device windows), its transport through the sound server, its
+  cursors; Open in Solaris starting the real Solaris and its save coming back through the file watch.
+- `[ ]` R-SONG next, if wanted: the Song page shows no picture (Solaris's Video window could be fed
+  Interstellar's monitor); a new Solaris version has no Interstellar menu item (Solaris's own Song menu
+  on the page has it); two hosted songs at different rates share Solaris's one library rate.
 - `[ ]` Home has no card or button for "open a Cosmo project" beyond the picker's filter.
 
 **► Integration of four parallel streams, then the service.** The second build is being made by four

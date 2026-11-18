@@ -1,9 +1,10 @@
 #!/bin/sh
 # The real app over the real service, headless: make media, build a project with the CLI (the
 # same grammar the GUI dispatches), then render every tab through the app's hooks.
-#   live.sh <interstellar-cc> <interstellar_live_shots> <ffmpeg> <workdir>
+#   live.sh <interstellar-cc> <interstellar_live_shots> <ffmpeg> <workdir> [solaris-cc]
+# With solaris-cc, a song is made too and opened on the Song page (R-SONG-7).
 set -eu
-ISCC="$1"; LIVE="$2"; FFMPEG="$3"; DIR="$4"
+ISCC="$1"; LIVE="$2"; FFMPEG="$3"; DIR="$4"; SOLCC="${5:-}"
 rm -rf "$DIR"; mkdir -p "$DIR/footage"; cd "$DIR"
 export HOME="$DIR" INTERSTELLAR_RECENTS="$DIR/recents"
 "$FFMPEG" -loglevel error -f lavfi -i testsrc2=size=640x360:rate=24:duration=4 -pix_fmt yuv420p footage/a.mp4
@@ -14,4 +15,12 @@ export HOME="$DIR" INTERSTELLAR_RECENTS="$DIR/recents"
   : clip add --track v0 --src b --in 0 --out 2 --at 2 --name shotB \
   : transition add --between shotA,shotB --dur 0.5 \
   : timeline new social30 --base main : project save > /dev/null
-"$LIVE" --project "$DIR/mv.isp" --outdir "$DIR/shots" --select a
+if [ -n "$SOLCC" ]; then
+  export XDG_CONFIG_HOME="$DIR/.config" XDG_DATA_HOME="$DIR/.local"
+  "$SOLCC" project new song.slp --bpm 120 : clip add --instrument drums --at 0 --length 8 \
+    : pattern steps pt_1 --pitch kick "x...x.x.x...x..x" : marker add Verse --at 0 --length 4 \
+    : marker add Drop --at 4 --length 4 : project save > /dev/null
+  "$LIVE" --project "$DIR/mv.isp" --outdir "$DIR/shots" --select a --song "$DIR/song.slp"
+else
+  "$LIVE" --project "$DIR/mv.isp" --outdir "$DIR/shots" --select a
+fi

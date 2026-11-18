@@ -40,6 +40,8 @@ in the section heading. Read before any code; conflict-check before accepting a 
   look can be cut, versioned and delivered.
 - **R-SCOPE-2 Four surfaces, and no more in v1:** a **Home** page of projects, and an **Edit** page
   of three tabs — **Grade** (grouping + colour), **Cut** (arrangement), **Deliver** (render).
+  (**AMENDED (R-SONG-7), 2026-11-18:** and a fourth Edit tab, **Song** — not a surface of
+  Interstellar's own: it is Solaris's window, hosted, for a song the project places.)
 - **R-SCOPE-3** `interstellar_core` is UI-free: no Artboard, no GTK, no codec, no OS paths. The CLI,
   the GUI and the tests are peers over one service.
 - **R-SCOPE-4 Not in v1**, stated so it is not silently attempted: node-graph compositing, motion
@@ -395,9 +397,8 @@ reserves the rest so adopting it is not a migration.
   succeed, show nothing of the song, and a `project save` then rewrote the song in Interstellar's
   node order with five video header keys added, a write into another app's file that no
   requirement governed. It is now refused, by what the file says (`app = solaris`), and the file is
-  left byte-identical. Opening, editing and saving a song is **R-SONG** (planned: a hosted
-  `SolarisService`, as the rack hosts Cosmo; edits are Solaris commands; saved on `main` or on a
-  named Solaris version) and is not built yet.)
+  left byte-identical. Placing, editing and saving a song is **R-SONG**: a hosted `SolarisService`,
+  as the rack hosts Cosmo; edits are Solaris commands; saved to the song's own file.)
 - **R-AUD-3 Time is shared with video and stated per project.** Seconds on a frame boundary in
   Interstellar; Solaris adds `bpm`/`sig` and beats, and the schema carries both without either app
   guessing.
@@ -426,6 +427,82 @@ reserves the rest so adopting it is not a migration.
   beside it yet); varispeed sound follows the clip's speed in pitch, as tape does; buses, sends and
   instruments of the suite schema sum straight to the master; a mono file sounds at its own level in
   both channels.
+
+---
+
+## R-SONG — a Solaris song as a whole DAW project inside Interstellar, edited and saved where it lives — ✅ IMPLEMENTED (DR-SONG-1, DR-SONG-2; the live GTK window not yet looked at)
+
+The founder (2026-11-18): *"interstellar shall be able to import solaris project and select
+arrangement plus version as an audio track and can edit directly + save directly"*. Built as the
+2026-11-17 plan said (PROGRESS, R-SONG): the song is a **hosted `SolarisService`**, as the rack is a
+hosted `CosmoService` (R-RACK-1) — never a second serializer of `.slp` (D-19 stands: `project open
+x.slp` is still refused; a song is placed, not opened as an Interstellar project).
+
+**AMENDED (the founder, 2026-11-18, on the first build):** *"it not import as a wave, it should be
+import as entire daw project, like a mini solaris inside interstellar"*. The first build placed the
+song as Solaris's render of it, made in the background and played as a wave — the project was there
+but nothing showed it, and an edit was heard only after a re-render. What replaces it: the clip plays
+the song **live through Solaris's engine** (R-SONG-2 below, rewritten), the song is **edited in
+Solaris's own window inside Interstellar** (R-SONG-7, new), and the clip **shows the song's lanes**
+(R-SONG-8, new). `wait song.rendered`, the `song.rendered` event, `songs[].rendering` and
+`clips[].songWaiting` are gone with the render they described.
+
+- **R-SONG-1 Import.** `song import <file.slp> [--version <v>] [--section <marker>] [--track <atrk>]
+  [--at <t>] [--gain <dB>] [--fade <s>]` places the song as one audio clip — a **song clip** — on an
+  audio track (a new `#atrack` named after the song when `--track` is not given). The clip names the
+  song (`src`, the `.slp`), its **version** (`version=`, absent = `main`) and its **arrangement**
+  section (`section=`, a marker's name; absent = the whole song). Its length is the section's, or the
+  song's to its last clip's end; the tail the song rings on with past its end is there to drag the
+  clip's end into. "Arrangement" means the song's sections — Solaris's markers, each running to its
+  section's end (Solaris R-ARR-1).
+- **R-SONG-2 The sound is Solaris's, played live.** (**AMENDED 2026-11-18**, above: was "what the
+  hosted service's `render` makes, captured in memory, rendered off the window's thread".) The clip
+  plays the song through **Solaris's own engine**, block by block as Interstellar reads it — the
+  playback, a scrub grain, a delivery render — compiled by Solaris from the song **as it stands**
+  (what `render --version` compiles, Solaris R-HOST-1) for that version and section. No render, no
+  file, no wave in between: an edit is heard from the next block read; nothing waits. Read in any block
+  size, the samples are the ones `solaris-cc render --bits 32f` writes for the same song, version and
+  range at the song's rate; a project at another rate hears them resampled. A version or section that
+  cannot be compiled any more (deleted in Solaris) leaves the clip silent and hatched, said once
+  (`song.failed`) with Solaris's reason.
+- **R-SONG-3 Select.** `set <aclip>.version=<name|main>` and `set <aclip>.section=<marker|"">` change
+  what a song clip plays — refused, naming what the song has, when it lacks it; a version that does
+  not stand as a song is refused with Solaris's reason. `song open <file.slp>` hosts a song without
+  placing it, so a front end can offer its versions and sections first. The model's `songs[]` lists
+  every hosted song: path, name, dirty, versions, sections (with seconds).
+- **R-SONG-4 Edit directly.** `song run <song> <solaris line>` runs one Solaris command line on the
+  hosted song: Solaris's grammar, its refusals, one step of the song's own history (`song run <song>
+  undo`). `<song>` is the song's file, its name, or one of its clips. A save of the same file from a
+  Solaris window lands here too: the hosted song watches its file as a Solaris window does (Solaris
+  R-COLLAB-1). The lines that would swap the song for another (`project open|new|close`), write it
+  somewhere else (`project save <path>`), write a file (`render`, `export` — Interstellar plays the
+  song; it delivers it with the picture) or leave the app (`quit`) are refused, each saying why.
+- **R-SONG-5 Save directly.** `song save <song>` — and `song run <song> project save`, Solaris's own
+  save, so its window's Ctrl+S works — writes the `.slp` through Solaris's `project save`: the user's
+  file, in place. `project save` writes every edited song with the `.isp`. An edited song makes the
+  project unsaved (the dot, the title's `*`, the close prompt — R-UI-21b/c), because closing without
+  saving would lose that edit.
+- **R-SONG-6 The window's ways in.** File ▸ Import Song… picks a `.slp` and places its whole song on
+  `main` at the playhead. A song clip's context menu chooses its version and its section (the current
+  ones marked), saves the song when it is edited, opens it on the Song page (Edit Song, R-SONG-7), and
+  opens it in the Solaris app itself (Open in Solaris) — whose save comes back through R-SONG-4's watch.
+- **R-SONG-7 The Song page — Solaris inside Interstellar** (added 2026-11-18). Edit has a fourth tab,
+  **Song** (key 4, View ▸ Song), after Deliver so 1–3 keep their keys. It shows a hosted song as the
+  whole DAW project in **Solaris's own window** — its song bar and transport, its browser, its lanes,
+  its mixer, its devices, its piano roll, its menus and keymap — the real Solaris front end, linked not
+  copied, below Interstellar's top bar and covering the monitor. Double-clicking a song clip, or Edit
+  Song on its menu, opens its song there; with no song shown it opens the first the project hosts; with
+  none it says how to import one, and offers to. Every intent of that window goes out as
+  `song run <song> <line>` — Solaris's grammar, one step of the song's history, what an agent could
+  have sent (Law 4). Inside the page's frame the pointer, the wheel and the keys are the window's (a
+  press that begins there stays its until released); Interstellar's top bar stays Interstellar's.
+  Solaris's Home is the way back to Cut. The song's transport plays the song alone (Interstellar's
+  rests while the page opens) and stops when the page is left. Each app keeps its accent: Solaris's
+  orange inside the frame, Interstellar's teal outside it.
+- **R-SONG-8 The clip shows the project** (added 2026-11-18). A song clip draws the song's lanes —
+  each lane a row, each of its clips a block, over the span the clip plays — instead of a waveform.
+  When an edit moves them, the new picture cross-fades over the old (never a cut). The model carries
+  them (`clips[].songLanes`).
 
 ---
 
@@ -536,6 +613,10 @@ reserves the rest so adopting it is not a migration.
   graded** — the frame being graded, as in Cosmo — and takes the transport's room. Cut and Deliver
   show the current timeline at the playhead with the transport. The monitor is still one widget that
   never moves or reloads its layout; what changed is that Grade's subject is a source, not the cut.)
+  (**AMENDED (R-SONG-7), 2026-11-18, the founder: "like a mini solaris inside interstellar":** a fourth
+  tab, **Song**, after Deliver, shows a hosted song in Solaris's own window and covers the monitor —
+  a song's window needs the room, and the song has its own transport. The monitor is still never moved
+  or reloaded by it; it is under the page, as it is under any modal.)
 - **R-UI-4 The version switcher is chrome, not a panel.** Which version you are editing is as
   present as which project you are in, and switching it is one click from anywhere in Edit.
 - **R-UI-5 Cosmo's widgets are reused as libraries**: `SliderRow`, `ParamPanel`, `MixerPanel`,

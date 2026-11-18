@@ -747,6 +747,71 @@
       "requirement": "R-AUD-2"
     },
     {
+      "verb": "song open",
+      "usage": "song open <file.slp>",
+      "args": "<file.slp>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "Host a Solaris song without placing it: its versions and sections appear in the model's songs[].",
+      "requirement": "R-SONG-3"
+    },
+    {
+      "verb": "song import",
+      "usage": "song import <file.slp> [--version <name|main>] [--section <marker>] [--track <atrk>] [--at <t>] [--gain <dB>] [--fade <s>]",
+      "args": "<file.slp>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "version",
+          "value": "<name|main>"
+        },
+        {
+          "name": "section",
+          "value": "<marker>"
+        },
+        {
+          "name": "track",
+          "value": "<atrk>"
+        },
+        {
+          "name": "at",
+          "value": "<t>"
+        },
+        {
+          "name": "gain",
+          "value": "<dB>"
+        },
+        {
+          "name": "fade",
+          "value": "<s>"
+        }
+      ],
+      "summary": "Place a Solaris song as an audio clip: one version (default main) and one section of its arrangement (a marker; default the whole song), rendered by Solaris. Without --track it gets an audio track of its own.",
+      "requirement": "R-SONG-1"
+    },
+    {
+      "verb": "song run",
+      "usage": "song run <song> <solaris line…>",
+      "args": "<song> <solaris line…>",
+      "minArgs": 2,
+      "maxArgs": 2,
+      "flags": [],
+      "summary": "Run one Solaris command line on a hosted song (its file, its name, or one of its clips): Solaris's grammar and refusals, one step of the song's own history. Its clips re-render.",
+      "requirement": "R-SONG-4"
+    },
+    {
+      "verb": "song save",
+      "usage": "song save [song]",
+      "args": "[song]",
+      "minArgs": 0,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "Write a hosted song (every edited one without an argument) to its own .slp, through Solaris.",
+      "requirement": "R-SONG-5"
+    },
+    {
       "verb": "undo",
       "usage": "undo",
       "args": "",
@@ -2125,6 +2190,35 @@
         "keys"
       ],
       "summary": "A parameter's curve changed; how many keyframes it has now (0 = no curve) (R-ANIM)."
+    },
+    {
+      "name": "song.opened",
+      "fields": [
+        "song",
+        "path",
+        "versions",
+        "sections"
+      ],
+      "summary": "A Solaris song is hosted: its name, its file, how many versions (main included) and sections it has (R-SONG-3)."
+    },
+    {
+      "name": "song.changed",
+      "fields": [
+        "song",
+        "what",
+        "line"
+      ],
+      "summary": "A hosted song changed: edited (a `song run` line that changed it), saved (its .slp written), or synced (its file changed on disk — a Solaris window saved it) (R-SONG-4/5)."
+    },
+    {
+      "name": "song.failed",
+      "fields": [
+        "song",
+        "version",
+        "section",
+        "why"
+      ],
+      "summary": "A song clip cannot sound: Solaris cannot compile that version and section of the song as it stands — said once per change of the song (R-SONG-2)."
     }
   ],
   "model": [
@@ -2199,6 +2293,132 @@
       "type": "bool",
       "stable": true,
       "doc": "Unsaved changes."
+    },
+    {
+      "path": "songsDirty",
+      "type": "bool",
+      "stable": true,
+      "doc": "R-SONG-5: a hosted song is edited and not saved to its .slp — the project counts as unsaved."
+    },
+    {
+      "path": "songs",
+      "type": "array",
+      "stable": true,
+      "doc": "R-SONG: the Solaris songs the project hosts (its song clips', and any `song open` hosted)."
+    },
+    {
+      "path": "songs[].name",
+      "type": "string",
+      "stable": true,
+      "doc": "The song's name — what `song run <song>` takes."
+    },
+    {
+      "path": "songs[].path",
+      "type": "string",
+      "stable": true,
+      "doc": "Its .slp (file name only when stable)."
+    },
+    {
+      "path": "songs[].src",
+      "type": "string",
+      "stable": true,
+      "doc": "Its path as the project's clips name it."
+    },
+    {
+      "path": "songs[].dirty",
+      "type": "bool",
+      "stable": true,
+      "doc": "Edited here, not yet written to its .slp."
+    },
+    {
+      "path": "songs[].bpm",
+      "type": "number",
+      "stable": true,
+      "doc": "Its tempo at the start."
+    },
+    {
+      "path": "songs[].seconds",
+      "type": "number",
+      "stable": true,
+      "doc": "Its length to its last clip's end, heard."
+    },
+    {
+      "path": "songs[].open",
+      "type": "string",
+      "stable": true,
+      "doc": "The version open in the hosted song — what `song run` edits."
+    },
+    {
+      "path": "songs[].versions",
+      "type": "array",
+      "stable": true,
+      "doc": "Its versions, main first (Solaris R-VER)."
+    },
+    {
+      "path": "songs[].versions[].id",
+      "type": "string",
+      "stable": true,
+      "doc": "vr_n, or main."
+    },
+    {
+      "path": "songs[].versions[].name",
+      "type": "string",
+      "stable": true,
+      "doc": "What --version and <aclip>.version take."
+    },
+    {
+      "path": "songs[].versions[].base",
+      "type": "string",
+      "stable": true,
+      "doc": "The version it is based on (\"\" for main)."
+    },
+    {
+      "path": "songs[].versions[].frozen",
+      "type": "bool",
+      "stable": true,
+      "doc": "It reads a snapshot (Solaris R-VER-3)."
+    },
+    {
+      "path": "songs[].versions[].problem",
+      "type": "string",
+      "stable": true,
+      "doc": "Why it does not stand as a song (\"\" when it does)."
+    },
+    {
+      "path": "songs[].sections",
+      "type": "array",
+      "stable": true,
+      "doc": "The open version's sections — its markers, each to its section's end (Solaris R-ARR-1)."
+    },
+    {
+      "path": "songs[].sections[].id",
+      "type": "string",
+      "stable": true,
+      "doc": "mk_n."
+    },
+    {
+      "path": "songs[].sections[].name",
+      "type": "string",
+      "stable": true,
+      "doc": "What --section and <aclip>.section take."
+    },
+    {
+      "path": "songs[].sections[].from",
+      "type": "number",
+      "stable": true,
+      "doc": "Seconds into the song where it starts, heard."
+    },
+    {
+      "path": "songs[].sections[].to",
+      "type": "number",
+      "stable": true,
+      "doc": "Seconds into the song where it ends, heard."
+    },
+    {
+      "path": "songs[].error",
+      "type": "string",
+      "stable": true,
+      "doc": "Why a clip of it cannot be played (\"\" none)."
     },
     {
       "path": "fps",
@@ -2679,6 +2899,54 @@
       "type": "integer",
       "stable": true,
       "doc": "A multicam clip's angle: the placed timeline's video track it shows, 1-based; 0 = all of it (R-EDT-5)."
+    },
+    {
+      "path": "clips[].song",
+      "type": "bool",
+      "stable": true,
+      "doc": "R-SONG: a song clip — its src is a Solaris song, played live by a hosted Solaris."
+    },
+    {
+      "path": "clips[].version",
+      "type": "string",
+      "stable": true,
+      "doc": "R-SONG: the song's version it plays (\"\" = main)."
+    },
+    {
+      "path": "clips[].section",
+      "type": "string",
+      "stable": true,
+      "doc": "R-SONG: the section of the song's arrangement it plays, a marker's name (\"\" = the whole song)."
+    },
+    {
+      "path": "clips[].songLanes",
+      "type": "array",
+      "stable": true,
+      "doc": "R-SONG-8: a song clip's lanes, as it draws them (song clips only)."
+    },
+    {
+      "path": "clips[].songLanes[].name",
+      "type": "string",
+      "stable": true,
+      "doc": "The lane's name in the song."
+    },
+    {
+      "path": "clips[].songLanes[].colour",
+      "type": "integer",
+      "stable": true,
+      "doc": "Solaris's lane colour index (-1 = its default)."
+    },
+    {
+      "path": "clips[].songLanes[].spans",
+      "type": "array",
+      "stable": true,
+      "doc": "Its clips: [from, to] pairs, seconds into the clip's source, cut to what it plays."
+    },
+    {
+      "path": "clips[].songError",
+      "type": "string",
+      "stable": true,
+      "doc": "R-SONG-2: why its version and section cannot be played now (\"\" none; song clips only)."
     },
     {
       "path": "clips[].provenance",
@@ -4700,6 +4968,24 @@
       "range": "0.0..10.0",
       "neutral": 0.0,
       "doc": "Fade in and out length."
+    },
+    {
+      "address": "<aclip>.version",
+      "owner": "aclip",
+      "key": "version",
+      "kind": "text",
+      "unit": "",
+      "range": "",
+      "doc": "R-SONG: a song clip's Solaris version (main = its root)."
+    },
+    {
+      "address": "<aclip>.section",
+      "owner": "aclip",
+      "key": "section",
+      "kind": "text",
+      "unit": "",
+      "range": "",
+      "doc": "R-SONG: a song clip's section — a marker's name (\"\" = the whole song)."
     },
     {
       "address": "<caption>.at",

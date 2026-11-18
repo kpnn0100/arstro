@@ -801,8 +801,8 @@ namespace solaris_ui
 
     void App::pointer(int kind, double x, double y, int button, double timeMs, bool alt, bool shift, bool ctrl)
     {
-        x /= mScale.value(); // R-ACCESS-1: the inverse of the root transform, once, at the entry point
-        y /= mScale.value();
+        x = (x - mOx) / mScale.value(); // R-ACCESS-1: the inverse of the root transform, once, at the entry point (R-HOST-2: its origin too)
+        y = (y - mOy) / mScale.value();
         mLastActivityMs = mNowMs;
         if (kind == 0)
         {
@@ -824,8 +824,8 @@ namespace solaris_ui
 
     void App::wheel(double x, double y, double notches, bool ctrl, bool shift, bool alt)
     {
-        x /= mScale.value(); // R-ACCESS-1
-        y /= mScale.value();
+        x = (x - mOx) / mScale.value(); // R-ACCESS-1, R-HOST-2
+        y = (y - mOy) / mScale.value();
         mLastActivityMs = mNowMs;
         RawPointer rp{};
         rp.kind = RawPointer::Kind::Scroll;
@@ -1275,7 +1275,10 @@ namespace solaris_ui
     {
         solaris_strings::setLanguage(language);
         relabel();
+        target.save();
+        target.setTransform(Transform::translation(mOx, mOy)); // R-HOST-2: the frame another window gave it
         drawRoundedRect(target, Rect{0, 0, mPhysW, mPhysH}, 0.0, Paint::filled(palette::background()));
+        target.restore();
         for (Segment *s : {(Segment *)mHome.get(), (Segment *)mProject.get()})
         {
             if (s->opacity.value() <= Segment::kOpacityEpsilon) continue;

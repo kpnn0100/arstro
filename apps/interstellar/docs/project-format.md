@@ -171,6 +171,15 @@ Audio nodes (`#atrack`, `#aclip`, `#note`, `#arack`, `#aeffect`, `#aauto`, `#ase
 schema: [`../../../docs/audio-format.md`](../../../docs/audio-format.md). They carry `timeline=` like any
 other arrangement node.
 
+**A song clip** (R-SONG) is an `#aclip` whose `src` is a Solaris song, with the version it plays
+(`version=`, absent = `main`) and the section of its arrangement (`section=`, a marker's name; absent = the
+whole song) — both overridable by a version like any clip field. Nothing of the song is copied into the
+`.isp`: the sound is that file played live by Solaris's engine while the project is open.
+
+```
+#aclip id=aclp_1 name=trap2 track=atrk_1 src=songs/trap.slp version=Quiet section=Intro at=2.000 in=0.000 out=1.583
+```
+
 ---
 
 ## 4b. Stills (R-CLR-4)

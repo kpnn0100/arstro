@@ -26,6 +26,7 @@
 #include "EmbeddedFonts.h"
 #include "FakeService.h"
 #include "Rig.h"
+#include <array>
 #include "widgets/TextFit.h"
 #include "widgets/CommandLine.h"
 #include "../../../cosmo/widgets/SliderRow.h"
@@ -2504,6 +2505,189 @@ namespace
         CHECK(changed > 60, "…and the clip shows it: the pixels along its centre line changed");
     }
 
+    /** R-SONG-6: File › Import Song… places a song at the playhead; a song clip's menu chooses its version
+     *  and its section, saves the song, and hands it to Solaris. */
+    void testSongUi()
+    {
+        std::printf("song: import, version, section, save, open in Solaris\n");
+        Rig r(1440, 900, [](FakeService &s) {
+            s.edit();
+            for (auto &c : s.m.clips)
+                if (c.id == "a3") { c.song = true; c.src = "songs/trap.slp"; c.srcName = "trap"; c.section = "Drop"; }
+            arstro::interstellar::SongModel g;
+            g.name = "trap";
+            g.src = "songs/trap.slp";
+            g.path = "/work/songs/trap.slp";
+            g.dirty = true;
+            g.versions = {arstro::interstellar::SongVersionModel{"main", "main", "", false, ""}, arstro::interstellar::SongVersionModel{"vr_1", "Quiet", "main", false, ""}};
+            g.sections = {arstro::interstellar::SongSectionModel{"mk_1", "Intro", 0.0, 1.6}, arstro::interstellar::SongSectionModel{"mk_2", "Drop", 1.6, 64.0}};
+            s.m.songs = {g};
+            s.m.songsDirty = true;
+            ++s.m.revision;
+        });
+        std::string opened;
+        r.app->onPickSongToImport = [](std::function<void(const std::string &)> done) { done("/music/my song.slp"); };
+        r.app->onOpenInSolaris = [&opened](const std::string &p) { opened = p; };
+        r.app->setTab(1);
+        r.settle();
+        CHECK(r.app->windowTitle().rfind("*", 0) == 0, "an edited song makes the title say unsaved, though the project itself is not");
+        r.svc.lines.clear();
+        CHECK(clickMenuItem(r, "File", "Import Song") && !r.svc.lines.empty() && r.svc.lines.back() == "song import \"/music/my song.slp\" --at 5.25",
+              "File > Import Song… dispatches song import <file> at the playhead");
+        r.pump(250);
+        auto tl = r.app->edit().timeline();
+        const Rect a3 = tl->clipRect("a3");
+        const Point p = world(*tl, a3.x + std::min(40.0, a3.w * 0.5), a3.y + a3.h * 0.5);
+        r.app->pointer(1, p.x, p.y, 0, r.now);
+        r.app->pointer(0, p.x, p.y, 2, r.now);
+        r.app->pointer(2, p.x, p.y, 2, r.now + 40.0);
+        r.pump(250);
+        auto cm = r.app->edit().contextMenu();
+        std::string labels;
+        for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
+        std::printf("      %s\n", labels.c_str());
+        auto find = [&](const std::string &label) {
+            for (int i = 0; i < cm->itemCount(); ++i)
+                if (cm->item(i).label.find(label) != std::string::npos) return i;
+            return -1;
+        };
+        const int quiet = find("Version Quiet"), main = find("Version main"), drop = find("Section Drop"), intro = find("Section Intro");
+        CHECK(cm->isOpen() && quiet >= 0 && main >= 0 && drop >= 0 && intro >= 0 && find("Whole Song") >= 0 && find("Save Song") >= 0 && find("Edit Song") >= 0 && find("Open in Solaris") >= 0,
+              "a song clip's menu lists its versions, its sections, Save Song, Edit Song and Open in Solaris");
+        CHECK(!cm->item(main).enabled && cm->item(main).label.rfind("\xE2\x80\xA2", 0) == 0 && !cm->item(drop).enabled && cm->item(quiet).enabled,
+              "…the version and section it plays are marked and not offered again");
+        CHECK(cm->item(intro).shortcut == "0:00\xE2\x80\x93" "0:02" && cm->item(drop).shortcut == "0:02\xE2\x80\x93" "1:04", "…each section says where it is in the song");
+        r.svc.lines.clear();
+        { const Point ip = centre(*cm, cm->itemRect(quiet)); r.click(ip.x, ip.y); r.pump(32); }
+        CHECK(hasLine(r.svc, "set a3.version=Quiet"), "choosing a version dispatches set <clip>.version=<name>");
+        auto reopen = [&] {
+            r.app->pointer(1, p.x, p.y, 0, r.now);
+            r.app->pointer(0, p.x, p.y, 2, r.now);
+            r.app->pointer(2, p.x, p.y, 2, r.now + 40.0);
+            r.pump(250);
+        };
+        reopen();
+        r.svc.lines.clear();
+        { const Point ip = centre(*cm, cm->itemRect(find("Section Intro"))); r.click(ip.x, ip.y); r.pump(32); }
+        CHECK(hasLine(r.svc, "set a3.section=Intro"), "choosing a section dispatches set <clip>.section=<marker>");
+        reopen();
+        r.svc.lines.clear();
+        { const Point ip = centre(*cm, cm->itemRect(find("Save Song"))); r.click(ip.x, ip.y); r.pump(32); }
+        CHECK(hasLine(r.svc, "song save trap"), "Save Song dispatches song save <name>");
+        reopen();
+        { const Point ip = centre(*cm, cm->itemRect(find("Open in Solaris"))); r.click(ip.x, ip.y); r.pump(32); }
+        CHECK(opened == "/work/songs/trap.slp", "Open in Solaris hands the song's own file to the host");
+    }
+
+    /** R-SONG-7: the Song page — a stand-in for Solaris's window records what reaches it. */
+    struct FakeSongView : arstro::interstellar_v1::EmbeddedView
+    {
+        std::string song;
+        Rect frame{0, 0, 0, 0};
+        int renders = 0, keys = 0, hides = 0, wheels = 0;
+        std::vector<std::array<double, 3>> pointers;   // kind, x, y — frame-relative device pixels
+        void render(artboard::IRenderTarget &t, double x, double y, double w, double h, double, double) override
+        {
+            ++renders;
+            frame = Rect{x, y, w, h};
+            t.setTransform(artboard::Transform::identity());
+            drawRoundedRect(t, Rect{x + 10, y + 10, 40, 40}, 0.0, artboard::Paint::filled(artboard::Color::hex(0xDD5A0C)));
+        }
+        bool needsRedraw(double) const override { return false; }
+        void pointer(int kind, double x, double y, int, double, bool, bool, bool) override { pointers.push_back({(double)kind, x, y}); }
+        void wheel(double, double, double, bool, bool, bool) override { ++wheels; }
+        bool key(const artboard::KeyEvent &e) override { ++keys; return e.keyCode == ' '; }
+        std::string cursorName() const override { return "col-resize"; }
+        std::string title() const override { return song; }
+        void hidden() override { ++hides; }
+    };
+
+    void testSongPage()
+    {
+        std::printf("song page: Solaris's window in Interstellar's frame, its input its own\n");
+        auto view = std::make_shared<FakeSongView>();
+        Rig r(1440, 900, [&view](FakeService &s) {
+            s.edit();
+            for (auto &c : s.m.clips)
+                if (c.id == "a3")
+                {
+                    c.song = true; c.src = "songs/trap.slp"; c.srcName = "trap";
+                    c.songLanes = {{"Drums", 0, {{0.0, 1.0}, {2.0, 3.0}}}, {"Bass", 1, {{0.5, 4.0}}}};
+                }
+            arstro::interstellar::SongModel g;
+            g.name = "trap"; g.src = "songs/trap.slp"; g.path = "/work/songs/trap.slp";
+            s.m.songs = {g};
+            ++s.m.revision;
+            s.songView = [view](const std::string &song) { view->song = song; return view; };
+        });
+        r.app->setTab(1);
+        r.settle();
+        // a double-click on the song clip opens its song on the fourth tab
+        auto tl = r.app->edit().timeline();
+        CHECK(tl->songLanesAmount("a3") == 1.0, "a song clip's lanes are placed whole, the first time (R-SONG-8)");
+        const Rect a3 = tl->clipRect("a3");
+        const Point p = world(*tl, a3.x + std::min(40.0, a3.w * 0.5), a3.y + a3.h * 0.5);
+        r.click(p.x, p.y);
+        r.frame();
+        r.click(p.x, p.y);
+        r.pump(64);
+        CHECK(r.app->tab() == arstro::interstellar_v1::EditScreen::Song && view->song == "trap" && r.svc.songViewAsks == 1,
+              "a double-click on a song clip opens its song on the Song page, its window asked of the host once");
+        r.settle();
+        const Rect f = r.app->edit().songPage()->deviceFrame();
+        CHECK(view->renders > 0 && f.y >= 29.0 && f.h > 800.0 && std::fabs(view->frame.y - f.y) < 0.5 && std::fabs(view->frame.w - f.w) < 0.5,
+              "the window paints in the page's frame — the whole body below Interstellar's top bar");
+        // the pointer inside the frame is the window's, in the frame's own pixels; outside it is Interstellar's
+        view->pointers.clear();
+        r.click(f.x + 100, f.y + 50);
+        CHECK(view->pointers.size() == 3 && view->pointers[1][0] == 0 && std::fabs(view->pointers[1][1] - 100) < 1e-9 && std::fabs(view->pointers[1][2] - 50) < 1e-9,
+              "a click in the frame reaches the window at frame-relative pixels");
+        CHECK(r.app->cursorName() == "col-resize", "…and the pointer there shows the window's own cursor");
+        view->pointers.clear();
+        r.press(f.x + 200, f.y + 200);
+        r.dragTo(f.x + 200, 10.0);   // over Interstellar's top bar: the press is still the window's
+        r.releaseAt(f.x + 200, 10.0);
+        CHECK(view->pointers.size() == 4 && view->pointers.back()[0] == 2 && view->pointers.back()[2] < 0.0,
+              "a press that began in the frame stays the window's until it is released, wherever it goes");
+        view->pointers.clear();
+        r.move(200.0, 10.0);
+        CHECK(view->pointers.empty() && r.app->cursorName() == "default", "over Interstellar's own top bar the pointer is Interstellar's");
+        // keys: the window's first; what it does not take is Interstellar's
+        artboard::KeyEvent space;
+        space.type = artboard::KeyEvent::Type::Down;
+        space.keyCode = ' ';
+        r.svc.lines.clear();
+        r.app->key(space);
+        CHECK(view->keys == 1 && !hasLine(r.svc, "play"), "a key on the Song page goes to the song's window first (its transport, not Interstellar's)");
+        // the top bar's tabs still lead out, and the page leaving tells the window (its transport stops)
+        r.app->setTab(1);
+        r.settle();
+        CHECK(view->hides == 1 && r.app->edit().tabFade(arstro::interstellar_v1::EditScreen::Song) < 0.01, "leaving the Song page stops what it plays, and it fades out");
+        // key 4 brings the same window back — not a new one
+        artboard::KeyEvent four;
+        four.type = artboard::KeyEvent::Type::Down;
+        four.keyCode = '4';
+        r.app->key(four);
+        r.settle();
+        CHECK(r.app->tab() == arstro::interstellar_v1::EditScreen::Song && r.svc.songViewAsks == 1, "key 4 opens the Song page again, with the window it had");
+    }
+
+    void testSongPageEmpty()
+    {
+        std::printf("song page: with no song, it says how to bring one in\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.app->onPickSongToImport = [](std::function<void(const std::string &)> done) { done("/music/beat.slp"); };
+        r.app->setTab(arstro::interstellar_v1::EditScreen::Song);
+        r.settle();
+        auto page = r.app->edit().songPage();
+        CHECK(!page->view() && page->emptyText() == "No song in this project yet.", "the empty Song page says there is no song");
+        r.svc.lines.clear();
+        const Rect fr = page->deviceFrame();
+        r.click(fr.x + fr.w * 0.5, fr.y + std::round(fr.h * 0.42 + 34.0) + 13.0);
+        r.pump(32);
+        CHECK(!r.svc.lines.empty() && r.svc.lines.back().rfind("song import /music/beat.slp --at ", 0) == 0, "…and its button imports one");
+    }
+
     /** R-XCH: File › Import / Export Timeline dispatch the grammar; the inspector shows reel and source TC. */
     void testInterchangeUi()
     {
@@ -3854,6 +4038,9 @@ int main()
     testLuts();
     testDeliverSound();
     testSoundUi();
+    testSongUi();
+    testSongPage();
+    testSongPageEmpty();
     testInterchangeUi();
     testEditingUi();
     testMulticamUi();

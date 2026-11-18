@@ -251,6 +251,8 @@ namespace solaris
             {"markers[].at", "number", "beats"},
             {"markers[].length", "number", "beats — a section; 0 a point"},
             {"markers[].end", "number", "where its section ends: at + length, else the next marker, else the song's end"},
+            {"markers[].seconds", "number", "where `at` is heard, through the tempo map"},
+            {"markers[].endSeconds", "number", "where `end` is heard"},
             {"songChords", "object[]", "R-ASSIST-1: the song's chords, by time — what `chords detect` heard (`chords` is `--chord`'s vocabulary)"},
             {"songChords[].id", "string", "cd_n"},
             {"songChords[].name", "string", "C, Am, F#, Bbm — a major or minor triad"},
@@ -308,6 +310,7 @@ namespace solaris
             {"matrix", "object", "the routing matrix (R-MIX-9), computed once for every face"},
             {"matrix.columns", "string[]", "its columns: every strip some strip may or does reach (processing order), \"master\", the output ports — every route and key has a cell"},
             {"lengthBeats", "number", "where the last clip ends"},
+            {"lengthSeconds", "number", "where the last clip ends, heard (through the tempo map)"},
             {"audit", "string[]", "the last `audit`'s findings"},
             {"lastError", "string", "the last refusal or failure"},
             {"recents", "object[]", "Home's cards, newest first (R-HOME-1)"},
@@ -815,7 +818,8 @@ namespace solaris
         j.set("patterns", patterns);
         Json markers = Json::array(); // R-ARR-1
         for (const auto &x : m.markers)
-            markers.push(Json::object().set("id", x.id).set("name", x.name).set("note", x.note).set("at", x.at).set("length", x.length).set("end", x.end));
+            markers.push(Json::object().set("id", x.id).set("name", x.name).set("note", x.note).set("at", x.at).set("length", x.length).set("end", x.end)
+                             .set("seconds", x.seconds).set("endSeconds", x.endSeconds));
         j.set("markers", markers);
         Json songChords = Json::array(); // R-ASSIST-1
         for (const auto &x : m.songChords) songChords.push(Json::object().set("id", x.id).set("name", x.name).set("at", x.at).set("length", x.length));
@@ -856,7 +860,7 @@ namespace solaris
         for (const auto &p : m.ports) ports.push(Json::object().set("id", p.id).set("name", p.name).set("dir", p.dir).set("channels", p.channels));
         j.set("ports", ports);
         j.set("matrix", Json::object().set("columns", strings(m.matrix.columns)));
-        j.set("lengthBeats", m.lengthBeats).set("audit", strings(m.audit)).set("lastError", m.lastError);
+        j.set("lengthBeats", m.lengthBeats).set("lengthSeconds", m.lengthSeconds).set("audit", strings(m.audit)).set("lastError", m.lastError);
         Json recents = Json::array();
         for (const auto &r : m.recents)
             recents.push(Json::object().set("path", r.path).set("name", r.name).set("bpm", r.bpm).set("lengthBeats", r.lengthBeats)

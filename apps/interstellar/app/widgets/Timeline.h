@@ -133,6 +133,15 @@ namespace interstellar_v1
         }
         /** Right-click on clip `id` / on an empty lane (`trackId` "" = below the tracks) at `t`, WORLD point. */
         std::function<void(const std::string &id, artboard::Point world)> onClipContext;
+        /** A double-click on clip `id` — a song clip opens its song on the Song page (R-SONG-7). */
+        std::function<void(const std::string &id)> onClipOpen;
+        /** R-SONG-8: the live amount of a song clip's lanes picture (1 at rest; 0 → 1 as an edit's new lanes
+         *  cross-fade over the old). */
+        double songLanesAmount(const std::string &clipId) const
+        {
+            const auto it = mSongLanes.find(clipId);
+            return it == mSongLanes.end() ? 0.0 : it->second.amount.value();
+        }
         std::function<void(const std::string &trackId, double t, artboard::Point world)> onLaneContext;
         /** R-ANIM-4: a right-click on a keyframe in the key lane — `address`, key time, WORLD point. */
         std::function<void(const std::string &address, double t, artboard::Point world)> onKeyContext;
@@ -272,6 +281,14 @@ namespace interstellar_v1
         // R-AUD-7: the envelopes this view has, each fading in when it lands
         struct Wave { std::vector<float> peaks; double perSecond = 100.0; artboard::AnimatedProperty amount{0.0}; bool placed = false; };
         std::map<std::string, Wave> mWaves;
+        // R-SONG-8: a song clip's lanes, the picture before an edit kept to cross-fade from (a change is never a cut)
+        struct SongLanes
+        {
+            std::vector<interstellar::ClipModel::SongLane> cur, prev;
+            artboard::AnimatedProperty amount{1.0};
+            bool wanted = false;
+        };
+        std::map<std::string, SongLanes> mSongLanes;   // by clip id
         unsigned mPeaksEpoch = ~0u;
         bool mEverBound = false, mPopulated = false;
 

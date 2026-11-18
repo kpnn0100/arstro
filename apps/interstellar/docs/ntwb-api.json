@@ -242,6 +242,18 @@
     "keys.changed": {
       "doc": "A parameter's curve changed; how many keyframes it has now (0 = no curve) (R-ANIM).",
       "data": "{line, fields: {address, keys}}"
+    },
+    "song.opened": {
+      "doc": "A Solaris song is hosted: its name, its file, how many versions (main included) and sections it has (R-SONG-3).",
+      "data": "{line, fields: {song, path, versions, sections}}"
+    },
+    "song.changed": {
+      "doc": "A hosted song changed: edited (a `song run` line that changed it), saved (its .slp written), or synced (its file changed on disk — a Solaris window saved it) (R-SONG-4/5).",
+      "data": "{line, fields: {song, what, line}}"
+    },
+    "song.failed": {
+      "doc": "A song clip cannot sound: Solaris cannot compile that version and section of the song as it stands — said once per change of the song (R-SONG-2).",
+      "data": "{line, fields: {song, version, section, why}}"
     }
   },
   "state": {

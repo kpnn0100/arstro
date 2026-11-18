@@ -403,7 +403,16 @@ namespace solaris
         }
         {
             const double end = songEndBeats(); // R-ARR-1: by time, each with its section's end
-            for (const auto &mk : p.markers) mModel.markers.push_back(MarkerModel{mk.id, mk.name, mk.note, mk.at, mk.length, p.sectionEnd(mk, end)});
+            // where each is HEARD (seconds through the tempo map): what a host placing a section in
+            // its own time needs and cannot work out from beats without the map (Interstellar R-SONG)
+            const double rate = p.header.sampleRate > 0 ? p.header.sampleRate : 48000;
+            for (const auto &mk : p.markers)
+            {
+                const double e = p.sectionEnd(mk, end);
+                mModel.markers.push_back(MarkerModel{mk.id, mk.name, mk.note, mk.at, mk.length, e,
+                                                     (double)beatsToSamples(p, mk.at) / rate, (double)beatsToSamples(p, e) / rate});
+            }
+            mModel.lengthSeconds = (double)beatsToSamples(p, mModel.lengthBeats) / rate;
             std::stable_sort(mModel.markers.begin(), mModel.markers.end(), [](const MarkerModel &a, const MarkerModel &b) { return a.at < b.at; });
             for (const auto &cd : p.chords) mModel.songChords.push_back(ChordModel{cd.id, cd.name, cd.at, cd.length}); // R-ASSIST-1: kept by time
             mModel.version = p.version.empty() ? "main" : p.version; // R-VER

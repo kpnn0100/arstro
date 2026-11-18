@@ -16,6 +16,10 @@ target_include_directories(interstellar_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/../../cosmo
   ${CMAKE_CURRENT_SOURCE_DIR}/../../../core/ImageProcessing/src)
 target_link_libraries(interstellar_core PUBLIC cosmo_core arstro_image interstellar_model interstellar_render)
+if(TARGET interstellar_song)   # R-SONG: without Solaris, `song import` says this build hosts no song
+  target_link_libraries(interstellar_core PUBLIC interstellar_song)
+  target_compile_definitions(interstellar_core PUBLIC INTERSTELLAR_HAVE_SONG=1)
+endif()
 
 # L2: the real service, headless. The suite's own gate is a colour edit reaching a real .cmp.
 add_executable(interstellar_core_tests tests/coreTests.cpp)
@@ -36,3 +40,7 @@ add_test(NAME interstellar_service COMMAND interstellar_service_tests)
 add_executable(interstellar_service_l2_tests tests/serviceL2Tests.cpp)
 target_link_libraries(interstellar_service_l2_tests PRIVATE interstellar_core)
 add_test(NAME interstellar_service_l2 COMMAND interstellar_service_l2_tests)
+if(TARGET solaris-cc)   # R-SONG-2: a song clip's sound against the file `solaris-cc render` writes
+  target_compile_definitions(interstellar_service_l2_tests PRIVATE SOLARIS_CC="$<TARGET_FILE:solaris-cc>")
+  add_dependencies(interstellar_service_l2_tests solaris-cc)
+endif()

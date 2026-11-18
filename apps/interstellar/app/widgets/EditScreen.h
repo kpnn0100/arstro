@@ -1,5 +1,6 @@
 /*
- *  interstellar_v1 — EditScreen: Screen::Edit — three tabs over ONE monitor (R-UI-3, ui-brief §3).
+ *  interstellar_v1 — EditScreen: Screen::Edit — three tabs over ONE monitor (R-UI-3, ui-brief §3), and a
+ *  fourth, Song, that covers it with a hosted song's own window (R-SONG-7).
  *
  *      ┌ EditTopBar 29.25 ───────────────────────────────────────────────────────────┐
  *      │ left column  │            MONITOR (outside the tab host)      │ right column │
@@ -42,6 +43,7 @@
 #include "OutputSpec.h"
 #include "RenderQueue.h"
 #include "NamePrompt.h"
+#include "SongPage.h"
 #include "../../../cosmo/widgets/ConfirmDialog.h"
 #include <functional>
 #include <memory>
@@ -54,7 +56,8 @@ namespace interstellar_v1
     class EditScreen : public artboard::Segment
     {
     public:
-        enum Tab { Grade = 0, Cut = 1, Deliver = 2 };
+        enum Tab { Grade = 0, Cut = 1, Deliver = 2, Song = 3 };   // R-SONG-7: Song last, so 1–3 keep their keys
+        static constexpr int kTabs = 4;
 
         EditScreen();
 
@@ -86,6 +89,7 @@ namespace interstellar_v1
         std::shared_ptr<OutputSpec> outputSpec() { return mOutput; }
         std::shared_ptr<RenderQueue> renderQueue() { return mQueue; }
         std::shared_ptr<NamePrompt> namePrompt() { return mNamePrompt; }
+        std::shared_ptr<SongPage> songPage() { return mSong; }
         /** Cosmo's right-click menu, over everything in Edit (R-UI-9). */
         std::shared_ptr<cosmo_v2::ContextMenu> contextMenu() { return mContextMenu; }
         /** Right-click on a rack node — rack tree row or filmstrip cell — at a point in this
@@ -95,6 +99,8 @@ namespace interstellar_v1
         std::function<void(const std::string &srcBind, const std::string &track, double at)> onDropSource;
         /** Right-clicks in the Cut timeline, for the app's menus. */
         std::function<void(const std::string &clipId, artboard::Point world)> onClipContext;
+        /** A double-click on a clip in the Cut timeline (a song clip opens its song, R-SONG-7). */
+        std::function<void(const std::string &clipId)> onClipOpen;
         /** R-ANIM-4: a right-click on a keyframe in a graph — `address`, key time `t`, at a world point. */
         std::function<void(const std::string &address, double t, artboard::Point world)> onKeyContext;
         std::function<void(double t, artboard::Point world)> onKeyPlotContext;
@@ -123,7 +129,7 @@ namespace interstellar_v1
         std::shared_ptr<EditTopBar> mTopBar;
         std::shared_ptr<Monitor> mMonitor;
         std::shared_ptr<Transport> mTransport;
-        std::shared_ptr<FadePage> mPages[3];
+        std::shared_ptr<FadePage> mPages[kTabs];
         std::shared_ptr<RackTree> mRack;
         std::shared_ptr<GradeInspector> mGradeInspector;
         std::shared_ptr<GradeDeck> mGradeDeck;
@@ -134,6 +140,7 @@ namespace interstellar_v1
         std::shared_ptr<OutputSpec> mOutput;
         std::shared_ptr<RenderQueue> mQueue;
         std::shared_ptr<NamePrompt> mNamePrompt;
+        std::shared_ptr<SongPage> mSong;
         std::shared_ptr<cosmo_v2::ContextMenu> mContextMenu;
         std::shared_ptr<cosmo_v2::ConfirmDialog> mConfirm;
         int mTab = Grade;

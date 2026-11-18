@@ -89,7 +89,7 @@ namespace interstellar
             case CK::TrackAdd: case CK::ClipAdd: case CK::ClipTrim: case CK::ClipSplit: case CK::ClipMove:
             case CK::ClipDelete: case CK::ClipRoll: case CK::ClipSlip: case CK::ClipSpeed:
             case CK::TransitionAdd: case CK::MarkerAdd: case CK::FxAdd: case CK::FxDelete:
-            case CK::AudioTrackAdd: case CK::AudioClipAdd: case CK::GradePaste: case CK::PresetApply:
+            case CK::AudioTrackAdd: case CK::AudioClipAdd: case CK::SongImport: case CK::GradePaste: case CK::PresetApply:
             case CK::ClipPaste: case CK::EffectAdd: case CK::EffectRemove: case CK::EffectMove:
             case CK::KeyAdd: case CK::KeyRemove: case CK::KeySet: case CK::KeyClear: case CK::KeyShift: case CK::KeyPaste:
             case CK::KeyMark: case CK::KeyMode:

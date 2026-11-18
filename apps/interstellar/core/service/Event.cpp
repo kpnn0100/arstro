@@ -63,6 +63,14 @@ namespace interstellar
             {EK::CacheChanged, "cache.changed", {"timeline", "frames", "total", "building"},
              "The preview cache of the current timeline: frames cached and current, of total (R-PLAY-1)."},
             {EK::KeysChanged, "keys.changed", {"address", "keys"}, "A parameter's curve changed; how many keyframes it has now (0 = no curve) (R-ANIM)."},
+            {EK::SongOpened, "song.opened", {"song", "path", "versions", "sections"},
+             "A Solaris song is hosted: its name, its file, how many versions (main included) and sections it has (R-SONG-3)."},
+            {EK::SongChanged, "song.changed", {"song", "what", "line"},
+             "A hosted song changed: edited (a `song run` line that changed it), saved (its .slp written), or synced (its file "
+             "changed on disk — a Solaris window saved it) (R-SONG-4/5)."},
+            {EK::SongFailed, "song.failed", {"song", "version", "section", "why"},
+             "A song clip cannot sound: Solaris cannot compile that version and section of the song as it stands — said once "
+             "per change of the song (R-SONG-2)."},
         };
         return specs;
     }

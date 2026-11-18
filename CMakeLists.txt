@@ -84,17 +84,19 @@ endif()
 # after the DSP library because its signal workload links arstro_dsp. Same GTK3 + Cairo
 # native backend as cosmo, so it builds on Linux and on Windows via MSYS2; the GUI
 # self-skips without pkg-config/GTK3 while its core + unit tests still build.
-# interstellar: a video colour tool with an editor attached. AFTER apps/cosmo, because its rack
-# hosts a real CosmoService and `if(TARGET cosmo_core)` can only see a target already defined.
-if(ARSTRO_BUILD_INTERSTELLAR)
-  add_subdirectory(apps/interstellar)
-endif()
-
 # solaris: the DAW. AFTER the DSP library — its engine hosts arstro_dsp's devices, and every
 # instrument and effect it plays is that library's (apps/solaris R-DSP-1) — and after cosmo, whose
-# widgets its UI reuses.
+# widgets its UI reuses. BEFORE interstellar, which hosts a Solaris song (R-SONG) and can only see
+# `solaris_core` once it is defined.
 if(ARSTRO_BUILD_SOLARIS)
   add_subdirectory(apps/solaris)
+endif()
+
+# interstellar: a video colour tool with an editor attached. AFTER apps/cosmo, because its rack
+# hosts a real CosmoService and `if(TARGET cosmo_core)` can only see a target already defined;
+# after apps/solaris, for the same reason: a song clip is a hosted SolarisService (R-SONG).
+if(ARSTRO_BUILD_INTERSTELLAR)
+  add_subdirectory(apps/interstellar)
 endif()
 
 if(ARSTRO_BUILD_ARSTROBENCH)

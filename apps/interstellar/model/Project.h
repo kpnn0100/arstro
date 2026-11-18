@@ -237,6 +237,9 @@ namespace interstellar
     {
         NodeId id, name, track, timeline;
         std::string src;                    // res:<hash> or a path: audio is referenced, never embedded
+        // R-SONG: when `src` is a Solaris song — the version it plays ("" = main) and the section
+        // of its arrangement, a marker's name ("" = the whole song)
+        std::string version, section;
         double at = 0, in = 0, out = 0;
         double gain = 0.0, fadeIn = 0.0, fadeOut = 0.0;
         bool loop = false;

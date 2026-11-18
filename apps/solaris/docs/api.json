@@ -3389,6 +3389,18 @@
       "stable": true
     },
     {
+      "path": "markers[].seconds",
+      "type": "number",
+      "summary": "where `at` is heard, through the tempo map",
+      "stable": true
+    },
+    {
+      "path": "markers[].endSeconds",
+      "type": "number",
+      "summary": "where `end` is heard",
+      "stable": true
+    },
+    {
       "path": "songChords",
       "type": "object[]",
       "summary": "R-ASSIST-1: the song's chords, by time — what `chords detect` heard (`chords` is `--chord`'s vocabulary)",
@@ -3722,6 +3734,12 @@
       "path": "lengthBeats",
       "type": "number",
       "summary": "where the last clip ends",
+      "stable": true
+    },
+    {
+      "path": "lengthSeconds",
+      "type": "number",
+      "summary": "where the last clip ends, heard (through the tempo map)",
       "stable": true
     },
     {

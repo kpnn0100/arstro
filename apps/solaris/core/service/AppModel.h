@@ -319,6 +319,7 @@ namespace solaris
     {
         std::string id, name, note;
         double at = 0, length = 0, end = 0;      // beats; length 0 = a point
+        double seconds = 0, endSeconds = 0;      // where `at` and `end` are heard, through the tempo map (Interstellar's sections)
     };
 
     /** R-ASSIST-1: a chord the song plays, as `chords detect` found it — a span of beats, named. */
@@ -563,6 +564,7 @@ namespace solaris
         std::vector<PortModel> ports;
         MatrixModel matrix;                      // R-MIX-9: its columns, so `matrix print` and the GUI show every route alike
         double lengthBeats = 0;                  // the song's end (the last clip's)
+        double lengthSeconds = 0;                // … heard at, through the tempo map
         std::vector<std::string> audit;          // the last `audit`'s findings
         std::string lastError;
         std::vector<RecentModel> recents;        // Home's cards, newest first

@@ -63,6 +63,10 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `fx delete <fx>` | Remove a temporal effect. | R-FX-2 |
 | `audio track add [--name <n>]` | Add an audio track (suite schema `#atrack kind=audio`). | R-AUD-2 |
 | `audio clip add [--track <atrk>] [--src <file>] [--at <t>] [--in <t>] [--out <t>] [--gain <dB>] [--fade <s>]` | Place a sound on an audio track: a file, or a rack source's own sound (`--src <bind>`). Without --out it runs to the end of the file's sound. | R-AUD-2 |
+| `song open <file.slp>` | Host a Solaris song without placing it: its versions and sections appear in the model's songs[]. | R-SONG-3 |
+| `song import <file.slp> [--version <name\|main>] [--section <marker>] [--track <atrk>] [--at <t>] [--gain <dB>] [--fade <s>]` | Place a Solaris song as an audio clip: one version (default main) and one section of its arrangement (a marker; default the whole song), rendered by Solaris. Without --track it gets an audio track of its own. | R-SONG-1 |
+| `song run <song> <solaris line…>` | Run one Solaris command line on a hosted song (its file, its name, or one of its clips): Solaris's grammar and refusals, one step of the song's own history. Its clips re-render. | R-SONG-4 |
+| `song save [song]` | Write a hosted song (every edited one without an argument) to its own .slp, through Solaris. | R-SONG-5 |
 | `undo` | Step back one edit — a grade, an override, a cut, a version change — across the rack and the project alike. | R-EDIT-1 |
 | `redo` | Step forward again after an undo. | R-EDIT-1 |
 | `grade copy <node>` | Copy a rack node's grade (its own params, masks excluded) to the clipboard. | R-EDIT-2 |
@@ -225,6 +229,8 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `<aclip>.out` | aclip | scalar | s |  | 0.0 | Source out-point. |
 | `<aclip>.gain` | aclip | scalar | dB | -60.0..12.0 | 0.0 | Clip gain. |
 | `<aclip>.fade` | aclip | scalar | s | 0.0..10.0 | 0.0 | Fade in and out length. |
+| `<aclip>.version` | aclip | text |  |  |  | R-SONG: a song clip's Solaris version (main = its root). |
+| `<aclip>.section` | aclip | text |  |  |  | R-SONG: a song clip's section — a marker's name ("" = the whole song). |
 | `<caption>.at` | caption | scalar | s |  | 0.0 | Timeline time the words appear. |
 | `<caption>.dur` | caption | scalar | s |  | 0.0 | How long they stay (more than zero). |
 | `<caption>.text` | caption | text |  |  |  | The words; \n is a new line. |
@@ -295,6 +301,9 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `presets.changed` | `count` | The preset library was rescanned. |
 | `cache.changed` | `timeline`, `frames`, `total`, `building` | The preview cache of the current timeline: frames cached and current, of total (R-PLAY-1). |
 | `keys.changed` | `address`, `keys` | A parameter's curve changed; how many keyframes it has now (0 = no curve) (R-ANIM). |
+| `song.opened` | `song`, `path`, `versions`, `sections` | A Solaris song is hosted: its name, its file, how many versions (main included) and sections it has (R-SONG-3). |
+| `song.changed` | `song`, `what`, `line` | A hosted song changed: edited (a `song run` line that changed it), saved (its .slp written), or synced (its file changed on disk — a Solaris window saved it) (R-SONG-4/5). |
+| `song.failed` | `song`, `version`, `section`, `why` | A song clip cannot sound: Solaris cannot compile that version and section of the song as it stands — said once per change of the song (R-SONG-2). |
 
 ## Model
 
@@ -314,6 +323,27 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `projectPath` | string |  | Open project's .isp (file name only when stable). |
 | `projectName` | string |  | Open project's display name. |
 | `dirty` | bool |  | Unsaved changes. |
+| `songsDirty` | bool |  | R-SONG-5: a hosted song is edited and not saved to its .slp — the project counts as unsaved. |
+| `songs` | array |  | R-SONG: the Solaris songs the project hosts (its song clips', and any `song open` hosted). |
+| `songs[].name` | string |  | The song's name — what `song run <song>` takes. |
+| `songs[].path` | string |  | Its .slp (file name only when stable). |
+| `songs[].src` | string |  | Its path as the project's clips name it. |
+| `songs[].dirty` | bool |  | Edited here, not yet written to its .slp. |
+| `songs[].bpm` | number |  | Its tempo at the start. |
+| `songs[].seconds` | number |  | Its length to its last clip's end, heard. |
+| `songs[].open` | string |  | The version open in the hosted song — what `song run` edits. |
+| `songs[].versions` | array |  | Its versions, main first (Solaris R-VER). |
+| `songs[].versions[].id` | string |  | vr_n, or main. |
+| `songs[].versions[].name` | string |  | What --version and <aclip>.version take. |
+| `songs[].versions[].base` | string |  | The version it is based on ("" for main). |
+| `songs[].versions[].frozen` | bool |  | It reads a snapshot (Solaris R-VER-3). |
+| `songs[].versions[].problem` | string |  | Why it does not stand as a song ("" when it does). |
+| `songs[].sections` | array |  | The open version's sections — its markers, each to its section's end (Solaris R-ARR-1). |
+| `songs[].sections[].id` | string |  | mk_n. |
+| `songs[].sections[].name` | string |  | What --section and <aclip>.section take. |
+| `songs[].sections[].from` | number |  | Seconds into the song where it starts, heard. |
+| `songs[].sections[].to` | number |  | Seconds into the song where it ends, heard. |
+| `songs[].error` | string |  | Why a clip of it cannot be played ("" none). |
 | `fps` | number |  | Project frame rate. |
 | `width` | integer |  | Delivery width. |
 | `height` | integer |  | Delivery height. |
@@ -394,6 +424,14 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `clips[].offline` | bool |  | Its media is missing. |
 | `clips[].nested` | bool |  | It places another timeline — a nested sequence (R-EDT-4). |
 | `clips[].angle` | integer |  | A multicam clip's angle: the placed timeline's video track it shows, 1-based; 0 = all of it (R-EDT-5). |
+| `clips[].song` | bool |  | R-SONG: a song clip — its src is a Solaris song, played live by a hosted Solaris. |
+| `clips[].version` | string |  | R-SONG: the song's version it plays ("" = main). |
+| `clips[].section` | string |  | R-SONG: the section of the song's arrangement it plays, a marker's name ("" = the whole song). |
+| `clips[].songLanes` | array |  | R-SONG-8: a song clip's lanes, as it draws them (song clips only). |
+| `clips[].songLanes[].name` | string |  | The lane's name in the song. |
+| `clips[].songLanes[].colour` | integer |  | Solaris's lane colour index (-1 = its default). |
+| `clips[].songLanes[].spans` | array |  | Its clips: [from, to] pairs, seconds into the clip's source, cut to what it plays. |
+| `clips[].songError` | string |  | R-SONG-2: why its version and section cannot be played now ("" none; song clips only). |
 | `clips[].provenance` | enum(local\|inherited\|overridden\|dangling) |  | Where it came from in this version. |
 | `transitions` | array |  | Transitions in the resolved current timeline. |
 | `transitions[].id` | string |  | Transition id. |

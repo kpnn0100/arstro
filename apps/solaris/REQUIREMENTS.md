@@ -558,7 +558,11 @@ R-VER, applied to an arrangement:
   rebase [--dry-run]|delete`, `revert <address|node>`, `set <vr>.name=`, `render --version`. Opening a version is a
   history step, not an unsaved change: a song always opens on main.
 - **R-VER-5 Reserved:** import another song (concatenate or overlay), embed a song in a song or in
-  Interstellar (was SR-MERGE-2, SR-EMBED-1..4).
+  Interstellar (was SR-MERGE-2, SR-EMBED-1..4). (**AMENDED (Interstellar R-SONG), 2026-11-18:** the
+  Interstellar half is built — on Interstellar's side, through Solaris's own service: a song placed there
+  is a hosted `SolarisService`, its sound this app's `render --version --from --to`, its edits this app's
+  command lines, its save this app's `project save`. Nothing here changed for it but R-ARR-1's seconds.
+  Importing a song into a song stays reserved.)
 
 ## R-RENDER — offline render — ✅ IMPLEMENTED (DR-RENDER-1) — 4 ✅ the minimum (a render from the window seen and its result said, DR-RENDER-4); the worker, progress and cancel OPEN
 
@@ -992,7 +996,10 @@ a process is the host's (law 12).
   — in the song's beats and the audio schema's prefix, `#amarker`, with `length` added: a marker with a length is a
   SECTION; one without is a point whose section runs to the next marker, else to the song's end, published as
   `markers[].end` so no front end re-derives it. `transport seek <mk>` and `transport loop <mk>` reach them — the
-  ruler's click and double-click, one line each.)
+  ruler's click and double-click, one line each.) (**Added 2026-11-18, for Interstellar R-SONG:** each marker also says
+  where its start and its section's end are HEARD — `markers[].seconds`, `markers[].endSeconds` — and the song its
+  length heard, `lengthSeconds`: through the tempo map, so a host placing a section in its own seconds never
+  re-derives the map.)
 - **R-ARR-2 Time edits across the song**: `time insert --at <b> --length <b>` and `time delete --from <b> --to <b>`
   move every clip, automation point, marker and loop after it — ONE edit. (**Detailed while building it, N14 — 2026-10-16.**
   What CROSSES an edit point is decided before anything moves. Inserting, a clip that starts before the point and
@@ -1824,6 +1831,26 @@ a process is the host's (law 12).
 - **R-TEST-4 Audio is asserted by numbers:** a render's peak/RMS/spectral peak at a known place,
   byte-identical output across two runs, a golden hash.
 
+
+## R-HOST — Solaris hosted inside another Arstro app — ✅ IMPLEMENTED (DR-HOST-1; the live GTK window not yet looked at)
+
+The founder (2026-11-18), of Interstellar: *"it should be import as entire daw project, like a mini
+solaris inside interstellar"* (Interstellar R-SONG-2/7/8, amended). Interstellar hosts a real
+`SolarisService` per song already (Interstellar R-SONG-1); what it needs of Solaris to play the song
+live and to show Solaris's window over it is below — nothing that changes Solaris on its own.
+
+- **R-HOST-1 A version's mix, for a host that plays it.** `SolarisService::compileVersion(version,
+  out, song, err)` gives a host what `render --version <v>` compiles: the version's graph, at the
+  song's **own** rate (so the devices a playing song shares are never re-tuned — the reason `render`
+  refuses another rate while playing), its plugins attached as a render attaches them (R-VST-6: an
+  offline one silent or dry, said in `warnings`), and the version as a project, whose tempo map places
+  beats. The graph shares the decoded media and nothing else of the service, so the host builds as
+  many engines from it as it has readers, each on its own thread. An engine built from it, sought to
+  `--from` and rendered in `render`'s chunks, writes the very samples `render` writes.
+- **R-HOST-2 The window in another app's frame.** `App::setOrigin(x, y)` puts the window's top-left
+  at a point of the host's target, in device pixels: everything is drawn from it and every pointer is
+  read from it, so a host draws Solaris's real window — every widget, menu and tween — inside a frame
+  of its own, and clips to it. (0, 0), the default, is a window of its own.
 
 ## R-BRAND — The logo and its animations — ✅ IMPLEMENTED (DR-BRAND-1)
 

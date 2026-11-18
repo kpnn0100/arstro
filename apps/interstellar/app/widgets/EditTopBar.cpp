@@ -23,7 +23,7 @@ namespace interstellar_v1
     EditTopBar::EditTopBar()
     {
         height.set(shell::topBarH());
-        mTabs = std::make_shared<TabSwitcher>(std::vector<std::string>{"Grade", "Cut", "Deliver"});
+        mTabs = std::make_shared<TabSwitcher>(std::vector<std::string>{"Grade", "Cut", "Deliver", "Song"});
         addChild(mTabs);
         mVersions = std::make_shared<VersionSwitcher>();
         addChild(mVersions);
@@ -47,8 +47,8 @@ namespace interstellar_v1
     void EditTopBar::bind(const interstellar::AppModel &m)
     {
         mProjectName = m.projectName;
-        mDirty = m.dirty;
-        mDot.set(m.dirty);   // a setter has no clock: the first advance places it, later ones ease
+        mDirty = unsaved(m);    // R-SONG-5: an edited song is unsaved work too
+        mDot.set(mDirty);   // a setter has no clock: the first advance places it, later ones ease
         mBound = true;
         mVersions->bind(m);
     }

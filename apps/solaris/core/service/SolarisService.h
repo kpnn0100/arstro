@@ -132,6 +132,12 @@ namespace solaris
         void subscribe(std::function<void(const Event &)> sink) { mSinks.push_back(std::move(sink)); }
         /** The open document (null on Home) — for tests and the host's title bar. */
         const Project *project() const { return mOpen ? &mProject : nullptr; }
+        /** R-HOST-1: a version's mix for a HOST that plays the song itself (Interstellar's song clip) — what
+         *  `render --version <v>` compiles ("" = main), at the song's OWN rate, so the devices a playing song shares are
+         *  never re-tuned; its plugins attached as a render attaches them (R-VST-6: an offline one silent or dry, said
+         *  in `warnings`). `song` is that version as a project — its tempo map places beats. The graph shares the decoded
+         *  media and nothing else of this service: an engine may be built from it on any thread, as many as wanted. */
+        bool compileVersion(const std::string &version, CompileResult &out, Project &song, std::string &err);
 
     private:
         // dispatch groups (ServiceEdit.cpp, ServiceModel.cpp, ServiceRender.cpp)

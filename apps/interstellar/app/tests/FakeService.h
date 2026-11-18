@@ -67,6 +67,8 @@ namespace istest
         std::vector<std::string> copies;
         bool copyFails = false;
 
+        std::function<std::shared_ptr<arstro::interstellar_v1::EmbeddedView>(const std::string &)> songView;
+        int songViewAsks = 0;
         arstro::interstellar_v1::AppHooks hooks()
         {
             arstro::interstellar_v1::AppHooks h;
@@ -84,6 +86,11 @@ namespace istest
                 for (size_t i = 0; i < pk.size(); ++i)
                     pk[i] = (float)(0.35 + 0.3 * std::sin(i * 0.031) * std::sin(i * 0.0047 + (double)media.size()));
                 return true;
+            };
+            // R-SONG-7: a test may stand a window in for Solaris's (the fake records what reaches it)
+            h.songView = [this](const std::string &song) -> std::shared_ptr<arstro::interstellar_v1::EmbeddedView> {
+                ++songViewAsks;
+                return songView ? songView(song) : nullptr;
             };
             h.copyFrame = [this](const std::string &b, std::string &err) {
                 if (copyFails) { err = "Nothing to copy"; return false; }

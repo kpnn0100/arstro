@@ -84,6 +84,7 @@ namespace interstellar
         j.set("projectPath", st ? baseName(m.projectPath) : m.projectPath);
         j.set("projectName", m.projectName);
         j.set("dirty", m.dirty);
+        j.set("songsDirty", m.songsDirty);   // R-SONG-5
         j.set("fps", m.fps);
         j.set("width", m.width);
         j.set("height", m.height);
@@ -164,7 +165,8 @@ namespace interstellar
 
         Json clips = Json::array();
         for (const auto &c : m.clips)
-            clips.push(Json::object()
+        {
+            Json o = Json::object()
                            .set("id", c.id)
                            .set("name", c.name)
                            .set("track", c.track)
@@ -177,12 +179,52 @@ namespace interstellar
                            .set("duration", c.duration)
                            .set("opacity", c.opacity)
                            .set("gain", c.gain)
-                           .set("audio", c.audio).set("media", c.media)
+                           .set("audio", c.audio)
+                           // R-SONG-2: a song clip's media names the program it plays, made anew at each edit —
+                           // when stable, the song and what it asks for instead
+                           .set("media", c.song && st ? "song:" + baseName(c.src) + "|" + c.version + "|" + c.section : c.media)
                            .set("offline", c.offline)
                            .set("nested", c.nested)
                            .set("angle", Json::integer(c.angle))
-                           .set("provenance", provenanceName(c.provenance)));
+                           .set("song", c.song).set("version", c.version).set("section", c.section)
+                           .set("provenance", provenanceName(c.provenance));
+            if (c.song)
+            {
+                Json lanes = Json::array();   // R-SONG-8
+                for (const auto &l : c.songLanes)
+                {
+                    Json sp = Json::array();
+                    for (const auto &x : l.spans) sp.push(Json::array().push(Json::number(x.first)).push(Json::number(x.second)));
+                    lanes.push(Json::object().set("name", l.name).set("colour", Json::integer(l.colour)).set("spans", sp));
+                }
+                o.set("songLanes", lanes).set("songError", c.songError);
+            }
+            clips.push(o);
+        }
         j.set("clips", clips);
+
+        Json songs = Json::array();   // R-SONG
+        for (const auto &g : m.songs)
+        {
+            Json vs = Json::array(), ss = Json::array();
+            for (const auto &v : g.versions)
+                vs.push(Json::object().set("id", v.id).set("name", v.name).set("base", v.base).set("frozen", v.frozen).set("problem", v.problem));
+            for (const auto &x : g.sections)
+                ss.push(Json::object().set("id", x.id).set("name", x.name).set("from", x.from).set("to", x.to));
+            Json o = Json::object()
+                         .set("name", g.name)
+                         .set("path", st ? baseName(g.path) : g.path)
+                         .set("src", g.src)
+                         .set("dirty", g.dirty)
+                         .set("bpm", g.bpm)
+                         .set("seconds", g.seconds)
+                         .set("open", g.open)
+                         .set("versions", vs)
+                         .set("sections", ss)
+                         .set("error", g.error);
+            songs.push(o);
+        }
+        j.set("songs", songs);
 
         Json trs = Json::array();
         for (const auto &t : m.transitions)
@@ -441,6 +483,27 @@ namespace interstellar
             {"projectPath", "string", "Open project's .isp (file name only when stable)."},
             {"projectName", "string", "Open project's display name."},
             {"dirty", "bool", "Unsaved changes."},
+            {"songsDirty", "bool", "R-SONG-5: a hosted song is edited and not saved to its .slp — the project counts as unsaved."},
+            {"songs", "array", "R-SONG: the Solaris songs the project hosts (its song clips', and any `song open` hosted)."},
+            {"songs[].name", "string", "The song's name — what `song run <song>` takes."},
+            {"songs[].path", "string", "Its .slp (file name only when stable)."},
+            {"songs[].src", "string", "Its path as the project's clips name it."},
+            {"songs[].dirty", "bool", "Edited here, not yet written to its .slp."},
+            {"songs[].bpm", "number", "Its tempo at the start."},
+            {"songs[].seconds", "number", "Its length to its last clip's end, heard."},
+            {"songs[].open", "string", "The version open in the hosted song — what `song run` edits."},
+            {"songs[].versions", "array", "Its versions, main first (Solaris R-VER)."},
+            {"songs[].versions[].id", "string", "vr_n, or main."},
+            {"songs[].versions[].name", "string", "What --version and <aclip>.version take."},
+            {"songs[].versions[].base", "string", "The version it is based on (\"\" for main)."},
+            {"songs[].versions[].frozen", "bool", "It reads a snapshot (Solaris R-VER-3)."},
+            {"songs[].versions[].problem", "string", "Why it does not stand as a song (\"\" when it does)."},
+            {"songs[].sections", "array", "The open version's sections — its markers, each to its section's end (Solaris R-ARR-1)."},
+            {"songs[].sections[].id", "string", "mk_n."},
+            {"songs[].sections[].name", "string", "What --section and <aclip>.section take."},
+            {"songs[].sections[].from", "number", "Seconds into the song where it starts, heard."},
+            {"songs[].sections[].to", "number", "Seconds into the song where it ends, heard."},
+            {"songs[].error", "string", "Why a clip of it cannot be played (\"\" none)."},
             {"fps", "number", "Project frame rate."},
             {"width", "integer", "Delivery width."},
             {"height", "integer", "Delivery height."},
@@ -521,6 +584,14 @@ namespace interstellar
             {"clips[].offline", "bool", "Its media is missing."},
             {"clips[].nested", "bool", "It places another timeline — a nested sequence (R-EDT-4)."},
             {"clips[].angle", "integer", "A multicam clip's angle: the placed timeline's video track it shows, 1-based; 0 = all of it (R-EDT-5)."},
+            {"clips[].song", "bool", "R-SONG: a song clip — its src is a Solaris song, played live by a hosted Solaris."},
+            {"clips[].version", "string", "R-SONG: the song's version it plays (\"\" = main)."},
+            {"clips[].section", "string", "R-SONG: the section of the song's arrangement it plays, a marker's name (\"\" = the whole song)."},
+            {"clips[].songLanes", "array", "R-SONG-8: a song clip's lanes, as it draws them (song clips only)."},
+            {"clips[].songLanes[].name", "string", "The lane's name in the song."},
+            {"clips[].songLanes[].colour", "integer", "Solaris's lane colour index (-1 = its default)."},
+            {"clips[].songLanes[].spans", "array", "Its clips: [from, to] pairs, seconds into the clip's source, cut to what it plays."},
+            {"clips[].songError", "string", "R-SONG-2: why its version and section cannot be played now (\"\" none; song clips only)."},
             {"clips[].provenance", "enum(local|inherited|overridden|dangling)", "Where it came from in this version."},
             {"transitions", "array", "Transitions in the resolved current timeline."},
             {"transitions[].id", "string", "Transition id."},

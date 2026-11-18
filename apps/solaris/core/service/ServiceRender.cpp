@@ -346,5 +346,26 @@ namespace solaris
         emit(Event(Event::Kind::RenderFinished).with("out", out).with("frames", (long long)master[0].size()).with("peak", dbText(mpk)));
         return true;
     }
+
+    bool SolarisService::compileVersion(const std::string &version, CompileResult &out, Project &song, std::string &err)
+    {
+        if (!mOpen) { err = "no song is open"; return false; }
+        // R-VER-4: by name, whichever version is open — what `render --version` resolves
+        std::string text;
+        if (!resolveVersion(mProject, version.empty() ? std::string("main") : version, text, err)) return false;
+        Project q;
+        if (!parseProject(text, q, err)) { err = version + " does not stand as a song: " + err; return false; }
+        q.header.sampleRate = mProject.header.sampleRate; // the song's own rate: the devices the playing song shares are never re-tuned
+        // the build sets the library's rate; put back what it was, as `render` does
+        struct RateBack
+        {
+            int rate = AudioConfig::instance().sampleRate();
+            ~RateBack() { AudioConfig::instance().setSampleRate(rate); }
+        } rateBack;
+        out = compile(q, [this](const std::string &src) { return pcmFor(src); }, [this](const std::string &s, std::string &t, std::string &w) { return textFor(s, t, w); });
+        attachPlugins(out, q, PluginUse::Render); // R-VST-6: each graph's make() holds its own connection
+        song = std::move(q);
+        return true;
+    }
 }
 }

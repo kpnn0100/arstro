@@ -21,7 +21,9 @@
 #pragma once
 #include "../core/Raster.h"
 #include "../core/service/AppModel.h"
+#include "widgets/EmbeddedView.h"
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -56,6 +58,10 @@ namespace interstellar_v1
         std::function<bool(const std::string &media, std::vector<float> &peaks, double &perSecond)> audioPeaks;
         /** R-CLR-4: a still's picture, for the gallery's thumbnail. */
         std::function<bool(const std::string &stillId, interstellar::Raster &out)> stillPicture;
+        /** R-SONG-7 (optional): Solaris's own window for the hosted song `song` (a name from `model.songs`),
+         *  made by the host and bound to that song — drawn on the Song page. Null when it cannot be made; empty
+         *  = the Song page says this build has no Solaris window. Asked once per song; the App keeps it. */
+        std::function<std::shared_ptr<EmbeddedView>(const std::string &song)> songView;
     };
 }
 }

@@ -31,6 +31,7 @@
 #include "../../cosmo/widgets/ContextMenu.h"
 #include "../../cosmo/widgets/Toast.h"
 #include <functional>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -74,6 +75,17 @@ namespace interstellar_v1
         /** R-XCH: an EDL / FCPXML / OTIO to read, or one to write (the extension picks the format). */
         std::function<void(std::function<void(const std::string &)> done)> onPickTimelineToImport;
         std::function<void(const std::string &suggested, std::function<void(const std::string &)> done)> onPickTimelineToExport;
+        /** R-SONG-6: a Solaris song (.slp) to place, answered through `done`; and a song handed to
+         *  Solaris itself to edit (its save comes back through the hosted song's file watch). */
+        std::function<void(std::function<void(const std::string &)> done)> onPickSongToImport;
+        std::function<void(const std::string &path)> onOpenInSolaris;
+        /** R-SONG-7: open hosted song `song` (a name from `model.songs`) on the Song page — its own window, made
+         *  once through AppHooks::songView and kept. With `song` empty, the first the project hosts. */
+        void openSong(const std::string &song);
+        /** … the song a clip places (a song clip's id), as a double-click on it does. */
+        void openSongOfClip(const std::string &clipId);
+        /** The pointer's shape for the host to show: the Song page's window says its own; elsewhere the arrow. */
+        std::string cursorName() const;
         // R-DLV-1: an .srt to read onto the open timeline, and where to write one
         std::function<void(std::function<void(const std::string &)> done)> onPickCaptionsToImport;
         std::function<void(const std::string &suggested, std::function<void(const std::string &)> done)> onPickCaptionsToExport;
@@ -191,6 +203,9 @@ namespace interstellar_v1
         void fetchSource(const interstellar::AppModel &m, const interstellar::RackNodeModel &n, int edge, bool force);
         void fetchViewer(const interstellar::AppModel &m, int edge, bool force);   // R-EDT-1: the source viewer
         void askUnsaved(const std::string &lost, std::function<void()> discard, std::function<void()> save);
+        /** R-SONG-7: the Song page's window, when it is the one up and nothing of Interstellar's is over it. */
+        EmbeddedView *songViewUp() const;
+        void importSong();
         void layoutAll();
         void noteActivity() { mLastActivityMs = mNowMs; }
         bool textEditing() const;
@@ -220,6 +235,11 @@ namespace interstellar_v1
         bool mBound = false;
         unsigned mSeenRevision = 0, mPaintedRevision = 0, mPaintedFrameSeq = 0;
         bool mPointerDown = false;
+        // R-SONG-7: each hosted song's window, made once; a press that began in the Song page's frame is its
+        // until the release; where the pointer last was (the cursor it shows)
+        std::map<std::string, std::shared_ptr<EmbeddedView>> mSongViews;
+        bool mSongPress = false;
+        artboard::Point mPointerAt{-1.0, -1.0};
 
         // frame fetch state
         unsigned mFetchedSeq = ~0u;

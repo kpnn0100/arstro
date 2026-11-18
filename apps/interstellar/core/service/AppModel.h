@@ -187,7 +187,45 @@ namespace interstellar
         bool offline = false;
         bool nested = false;          // R-EDT-4: it places another timeline (src is that timeline's id)
         int angle = 0;                // R-EDT-5: the placed timeline's video track it shows (0 = all of it)
+        // R-SONG: a song clip — its src is a Solaris song; the version and section it plays
+        bool song = false;
+        std::string version, section; // "" = main / the whole song
+        /** R-SONG-8: the song's lanes as the clip shows them — each lane's clips, seconds into the clip's
+         *  source (its section's start is 0) and cut to what it plays. */
+        struct SongLane
+        {
+            std::string name;
+            int colour = -1;          // Solaris's lane colour index (−1 = its default)
+            std::vector<std::pair<double, double>> spans;
+        };
+        std::vector<SongLane> songLanes;
+        std::string songError;        // R-SONG-2: why its version and section cannot be played now ("" none)
         Provenance provenance = Provenance::Local;
+    };
+
+    /** R-SONG: a Solaris song hosted by the service — what a front end offers when it places one. */
+    struct SongSectionModel
+    {
+        std::string id, name;         // the marker's
+        double from = 0, to = 0;      // seconds, where the section is heard in the song
+    };
+    struct SongVersionModel
+    {
+        std::string id, name, base;   // main: id = name = "main", base ""
+        bool frozen = false;
+        std::string problem;          // why it does not stand as a song ("" when it does)
+    };
+    struct SongModel
+    {
+        std::string name;             // the song's name — `song run <name> …`
+        std::string path;             // the .slp, absolute
+        std::string src;              // as the project's clips name it (relative to the .isp)
+        bool dirty = false;           // edited here and not saved to its .slp
+        double bpm = 0, seconds = 0;  // seconds: to its last clip's end
+        std::string open = "main";    // the version open in the hosted song (what `song run` edits)
+        std::vector<SongVersionModel> versions;   // main first
+        std::vector<SongSectionModel> sections;   // the open version's, by time
+        std::string error;            // why a clip of it cannot be played ("" none)
     };
 
     struct TransitionModel
@@ -306,6 +344,7 @@ namespace interstellar
         // ── the open project ──
         std::string projectPath, projectName;
         bool dirty = false;
+        bool songsDirty = false;      // R-SONG-5: a hosted song is edited and unsaved — the project is unsaved too
         double fps = 24.0;
         int width = 1920, height = 1080;
 
@@ -325,6 +364,7 @@ namespace interstellar
         NodeId currentTimeline;
         std::vector<TrackModel> tracks;
         std::vector<ClipModel> clips;
+        std::vector<SongModel> songs;     // R-SONG: every hosted song, by name
         std::vector<TransitionModel> transitions;
         std::vector<MarkerModel> markers;
         NodeId selectedClip;
@@ -414,5 +454,8 @@ namespace interstellar
         // ── failure, inspectable after the fact by a front end that was not listening ──
         std::string lastError;
     };
+    /** R-SONG-5: unsaved work anywhere — the project's own, or a song it hosts. The dot, the title's
+     *  `*` and the close prompt read this, never `dirty` alone. */
+    inline bool unsaved(const AppModel &m) { return m.dirty || m.songsDirty; }
 }
 }

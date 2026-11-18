@@ -9,6 +9,11 @@
 across the footage of a production; its timeline exists so a graded look can be cut, versioned and
 delivered.
 
+It opens a Cosmo project as its rack, and it places a Solaris song as a whole DAW project on an
+audio track — one version, one section of its arrangement — played live by Solaris's own engine,
+edited in Solaris's own window on the Song page (or with Solaris's command lines, `song run`) and
+saved back to the song's own file (R-SONG).
+
 That sentence is the correction at the centre of this rebuild. The first version made the timeline
 the app and colour an embedded afterthought, and it shipped twice as a cutting tool whose colour
 authority was a test fake.

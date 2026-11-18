@@ -4,6 +4,9 @@
 # authority, and an Interstellar that cannot grade is not a degraded Interstellar — it is the thing
 # two previous builds shipped by mistake.
 if(TARGET cosmo_core)
+  if(TARGET solaris_core)
+    add_subdirectory(song)   # R-SONG: a Solaris song hosted here — the one target that sees Solaris
+  endif()
   add_subdirectory(model)    # the .isp + versions: no Cosmo, no pixels
   add_subdirectory(render)   # the frame path: no project model
   add_subdirectory(core)     # the service: rack + model + render
@@ -28,6 +31,10 @@ if(TARGET interstellar_app AND TARGET interstellar_host)
   pkg_check_modules(INTERSTELLAR_GTK3 REQUIRED IMPORTED_TARGET gtk+-3.0)
   add_executable(interstellar ${CMAKE_CURRENT_SOURCE_DIR}/linux_main.cpp)
   target_link_libraries(interstellar PRIVATE interstellar_app interstellar_host PkgConfig::INTERSTELLAR_GTK3)
+  if(TARGET interstellar_song_ui)   # R-SONG-7: the Song page's Solaris window
+    target_link_libraries(interstellar PRIVATE interstellar_song_ui)
+    target_compile_definitions(interstellar PRIVATE INTERSTELLAR_HAVE_SONG_UI=1)
+  endif()
 endif()
 
 # Every codec and profile Deliver offers, through the real encoders, read back with ffprobe —
@@ -47,11 +54,19 @@ endif()
 if(TARGET interstellar_app AND TARGET interstellar_host)
   add_executable(interstellar_live_shots ${CMAKE_CURRENT_SOURCE_DIR}/tests/liveShots.cpp)
   target_link_libraries(interstellar_live_shots PRIVATE interstellar_app interstellar_host)
+  if(TARGET interstellar_song_ui)   # R-SONG-7: the Song page drawn with Solaris's real window
+    target_link_libraries(interstellar_live_shots PRIVATE interstellar_song_ui)
+    target_compile_definitions(interstellar_live_shots PRIVATE INTERSTELLAR_HAVE_SONG_UI=1)
+  endif()
   find_program(INTERSTELLAR_FFMPEG_FOR_LIVE ffmpeg)
   if(INTERSTELLAR_FFMPEG_FOR_LIVE)
+    set(INTERSTELLAR_LIVE_SOLCC "")
+    if(TARGET interstellar_song_ui AND TARGET solaris-cc)   # R-SONG-7: and the Song page, with a song made by Solaris
+      set(INTERSTELLAR_LIVE_SOLCC "$<TARGET_FILE:solaris-cc>")
+    endif()
     add_test(NAME interstellar_live
       COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tests/live.sh" "$<TARGET_FILE:interstellar-cc>"
               "$<TARGET_FILE:interstellar_live_shots>" "${INTERSTELLAR_FFMPEG_FOR_LIVE}"
-              "${CMAKE_CURRENT_BINARY_DIR}/live")
+              "${CMAKE_CURRENT_BINARY_DIR}/live" ${INTERSTELLAR_LIVE_SOLCC})
   endif()
 endif()

@@ -3436,7 +3436,9 @@ beats, written `#amarker id=mk_1 name=Chorus at=16.0 length=8.0 note="…"` (`mo
 `note` only when set; in the id space, so `nextId("mk")`; docs/project-format.md §9a, docs/audio-format.md §2.10). With
 a `length` it is a SECTION; without, a point whose section runs to the next marker after it, else the song's end
 (`Project::sectionEnd`, `model/Project.cpp:96`) — published as `markers[].end` beside `at`, `length`, `name`, `note`, by
-time (`core/service/ServiceModel.cpp:401`). `marker add <name> --at [--length] [--note]` (prints its id), `marker rename
+time (`core/service/ServiceModel.cpp:401`), each with where its start and end are heard, `markers[].seconds` and
+`endSeconds`, and the song's `lengthSeconds` — `beatsToSamples` through the tempo map over the song's rate
+(`ServiceModel.cpp:413`; R-ARR-1 added 2026-11-18 for Interstellar R-SONG, whose test places a section by them). `marker add <name> --at [--length] [--note]` (prints its id), `marker rename
 <mk> <name> [--note]`, `marker move <mk> [--at] [--length]`, `marker delete <mk>` — edits like any, kept sorted by time
 (`core/service/ServiceArrange.cpp:376`); `ls` lists them with their sections. `transport seek <mk>` goes to its beat and
 `transport loop <mk>` loops its section (`markerSpan`, `ServiceArrange.cpp:31`; `core/service/ServiceTransport.cpp:680`,
@@ -4319,6 +4321,23 @@ header with the agent's name and state, the user's line, the tool line, the repl
 list, the composer and Send. **Not proven:** typing into the field (no key test), the 1024×640
 frame was rendered but not looked at, and the live window.
 
+
+## DR-HOST — Solaris hosted inside another Arstro app (R-HOST)
+
+### DR-HOST-1 A version's mix for a host, and the window in a host's frame (R-HOST-1, R-HOST-2)
+`SolarisService::compileVersion` (`core/service/ServiceRender.cpp:350`) resolves the version by name as `render
+--version` does (`resolveVersion` + `parseProject`; "" = main), keeps the song's own sample rate, compiles it with
+the service's decoded media (`pcmFor`) and texts, and attaches its plugins as a render does (`attachPlugins`,
+`PluginUse::Render` — each graph's `make` holds its own connection); the library's rate is put back after, as
+`render` puts it back. Interstellar's song clip (Interstellar DR-SONG-1) builds one engine per reader from the graph
+and renders it in `render`'s 4096-frame chunks from the seek, dropping `outputLatency()` — its samples equal the WAV
+`render --bits 32f --from --to` writes, bit for bit (Interstellar `serviceL2Tests.cpp:569`).
+`App::setOrigin` (`app/App.h:60`) moves the window's top-left in the host's target: `rootTransform()` is the
+origin's translation times the drawn scale (`App.h:243`), the window's background is painted from it
+(`App.cpp:1279`), and `pointer`/`wheel` subtract it before dividing by the scale (`App.cpp:804`, `:827`). A window
+of its own keeps (0, 0) and draws exactly as before (the `solaris_app_shots` and `solaris_app_ui` suites unchanged).
+Interstellar's bridge (Interstellar DR-SONG-2) draws the real window in its Song page with it; the live shot finds
+Solaris's accent inside that frame and nowhere outside it.
 
 ## DR-BRAND — The logo and its animations (R-BRAND)
 

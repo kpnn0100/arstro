@@ -144,6 +144,19 @@ namespace interstellar
              "Place a sound on an audio track: a file, or a rack source's own sound (`--src <bind>`). "
              "Without --out it runs to the end of the file's sound.", "R-AUD-2"},
 
+            // R-SONG: a Solaris song, hosted — placed as a clip, edited with Solaris's own grammar, saved in place
+            {K::SongOpen, "song open", "<file.slp>", 1, 1, {},
+             "Host a Solaris song without placing it: its versions and sections appear in the model's songs[].", "R-SONG-3"},
+            {K::SongImport, "song import", "<file.slp>", 1, 1,
+             {"version=<name|main>", "section=<marker>", "track=<atrk>", "at=<t>", "gain=<dB>", "fade=<s>"},
+             "Place a Solaris song as an audio clip: one version (default main) and one section of its arrangement "
+             "(a marker; default the whole song), rendered by Solaris. Without --track it gets an audio track of its own.", "R-SONG-1"},
+            {K::SongRun, "song run", "<song> <solaris line…>", 2, 2, {},
+             "Run one Solaris command line on a hosted song (its file, its name, or one of its clips): Solaris's grammar "
+             "and refusals, one step of the song's own history. Its clips re-render.", "R-SONG-4", false, true},
+            {K::SongSave, "song save", "[song]", 0, 1, {},
+             "Write a hosted song (every edited one without an argument) to its own .slp, through Solaris.", "R-SONG-5"},
+
             {K::Undo, "undo", "", 0, 0, {},
              "Step back one edit — a grade, an override, a cut, a version change — across the rack and "
              "the project alike.", "R-EDIT-1"},
@@ -494,6 +507,36 @@ namespace interstellar
 
         Command out;
         out.kind = spec->kind;
+        if (spec->rawTail)
+        {
+            // R-SONG-4: the verb, ONE token, then the rest of the line exactly as written. Walked with
+            // the tokenizer's own quote rule, so the boundary is where tokenize() would have put it.
+            size_t pos = 0, seen = 0;
+            const size_t want = verbWords + 1;
+            while (seen < want && pos < line.size())
+            {
+                while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t')) ++pos;
+                if (pos >= line.size()) break;
+                bool inQuote = false;
+                while (pos < line.size() && (inQuote || (line[pos] != ' ' && line[pos] != '\t')))
+                {
+                    if (line[pos] == '"') inQuote = !inQuote;
+                    ++pos;
+                }
+                ++seen;
+            }
+            std::string rest = pos < line.size() ? line.substr(pos) : std::string();
+            const auto a = rest.find_first_not_of(" \t\r\n"), b = rest.find_last_not_of(" \t\r\n");
+            rest = a == std::string::npos ? std::string() : rest.substr(a, b - a + 1);
+            if (seen < want || rest.empty())
+            {
+                err = "too few arguments — usage: " + usageOf(*spec);
+                return c;
+            }
+            out.args.push_back(t[verbWords]);
+            out.args.push_back(rest);
+            return out;
+        }
         for (size_t i = verbWords; i < t.size(); ++i)
         {
             const std::string &tok = t[i];
@@ -556,6 +599,7 @@ namespace interstellar
         const CommandSpec *s = specFor(c.kind);
         if (!s) return std::string();
         std::string line = s->verb;
+        if (s->rawTail && c.args.size() == 2) return line + " " + quoteToken(c.args[0]) + " " + c.args[1];
         if (s->fieldArgs)
             for (const auto &f : c.fields) line += " " + quoteToken(f.first + "=" + f.second);
         else

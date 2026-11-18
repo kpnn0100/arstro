@@ -11,11 +11,17 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-11-17 — the family standard adopted (R-FAM-1…8; one line of R-FAM-7 waits for the service).*
+*Last updated: 2026-11-18 — Solaris hosted inside Interstellar: a version's mix for a host, the window in a host's frame (R-HOST-1/2, DR-HOST-1).*
 
 ---
 
 ## NEXT
+
+**2026-11-18, Solaris inside Interstellar (R-HOST, for Interstellar R-SONG-2/7).**
+- `[x]` **R-HOST-1** `SolarisService::compileVersion` — what `render --version` compiles, at the song's own rate,
+  plugins as a render's; Interstellar's engines from it equal `render`'s WAV bit for bit. DR-HOST-1.
+- `[x]` **R-HOST-2** `App::setOrigin` — the window drawn and read from a host's frame; (0, 0) unchanged. DR-HOST-1.
+- `[!]` UNVERIFIED: Solaris's window by hand inside Interstellar's GTK window (L5).
 
 **2026-11-17, the family standard (cosmo R-FAMILY-0, design rule §2.7) — Solaris's half (R-FAM, DR-FAM).** Runs
 beside J4. NOT committed (the tree is shared with the cosmo and interstellar passes).

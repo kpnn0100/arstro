@@ -140,6 +140,8 @@ namespace interstellar_v1
         // the Cut tab, like an editor (R-UI-14)
         mEdit->onDropSource = [this](const std::string &src, const std::string &track, double at) { dropSource(src, track, at); };
         mEdit->onClipContext = [this](const std::string &id, Point w) { openClipContext(id, w); };
+        mEdit->onClipOpen = [this](const std::string &id) { openSongOfClip(id); };   // R-SONG-7
+        mEdit->songPage()->onImport = [this] { importSong(); };
         mEdit->onKeyContext = [this](const std::string &a, double t, Point w) { openKeyContext(a, t, w); };
         mEdit->onKeyPlotContext = [this](double t, Point w) { openKeyPlotContext(t, w); };
         mEdit->onAnimateMenu = [this](Rect w) { openAnimateMenu(w); };
@@ -371,6 +373,9 @@ namespace interstellar_v1
             item("Save As\xE2\x80\xA6", [this] { if (onPickSaveAs) onPickSaveAs(); }, "Ctrl+Shift+S"),
             MItem::sep(),
             item("Add Footage\xE2\x80\xA6", [this] { if (onPickFootage) onPickFootage(); }),
+            // R-SONG-6: a Solaris song as a track — its whole song on main at the playhead; the clip's
+            // own menu then chooses its version and section
+            item("Import Song\xE2\x80\xA6", [this] { importSong(); }),
             item("Relink Media\xE2\x80\xA6", [this] { openRelinkMenu(Point(width() * 0.25, 40.0)); }, "", offline),   // R-MEDIA-3
             MItem::sep(),
             // R-XCH: a cut for another editor, and back
@@ -469,7 +474,7 @@ namespace interstellar_v1
     {
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
         auto pick = [this] { if (onPickProjectToCreate) onPickProjectToCreate(); };
-        if (!m.dirty || mScreen != interstellar::Screen::Edit) { pick(); return; }
+        if (!interstellar::unsaved(m) || mScreen != interstellar::Screen::Edit) { pick(); return; }
         // the open project has unsaved edits: the Home path's question first (R-UI-7 amended)
         askUnsaved("Edits since the last save are lost if you go on without saving.", pick,
                    [this, pick] { if (dispatch("project save")) pick(); });
@@ -504,6 +509,7 @@ namespace interstellar_v1
             item("Grade", [this] { mEdit->setTab(EditScreen::Grade); }, "1"),
             item("Cut", [this] { mEdit->setTab(EditScreen::Cut); }, "2"),
             item("Deliver", [this] { mEdit->setTab(EditScreen::Deliver); }, "3"),
+            item("Song", [this] { openSong(mEdit->songPage()->song()); }, "4"),   // R-SONG-7
             MItem::sep(),
             item("Reset Workspace", [this] { mEdit->timeline()->resetView(); mEdit->monitor()->resetZoom(); }),   // the view, on the tab you are in (R-UI-19d)
         };
@@ -1000,6 +1006,54 @@ namespace interstellar_v1
         if (m.hasClipClipboard) items.push_back({"Paste at Playhead", [this] { dispatch("clip paste"); }, "Ctrl+V"});
         items.push_back({"Delete", [this, q] { dispatch("clip delete " + q); }, "Del"});
         items.push_back({"Ripple Delete", [this, q] { dispatch("clip delete " + q + " --ripple"); }, "Shift+Del"});
+        if (clip.song)
+        {
+            // R-SONG-6: what the song clip plays — a version, a section of the arrangement — and the song itself
+            const interstellar::SongModel *g = nullptr;
+            for (const auto &x : m.songs) if (x.src == clip.src) g = &x;
+            if (g)
+            {
+                const std::string cur = clip.version.empty() ? "main" : clip.version;
+                items.push_back(cosmo_v2::ContextMenu::Item::sep());
+                for (const auto &v : g->versions)
+                {
+                    cosmo_v2::ContextMenu::Item it{std::string(v.name == cur ? kBullet : kNoBullet) + "Version " + clipLabel(v.name, 24),
+                                                   [this, q = cmd::quote(clip.id + ".version=" + v.name)] { dispatch("set " + q); }};
+                    it.enabled = v.name != cur && v.problem.empty();
+                    items.push_back(it);
+                }
+                items.push_back(cosmo_v2::ContextMenu::Item::sep());
+                {
+                    cosmo_v2::ContextMenu::Item it{std::string(clip.section.empty() ? kBullet : kNoBullet) + "Whole Song",
+                                                   [this, q = cmd::quote(clip.id + ".section=")] { dispatch("set " + q); }};
+                    it.enabled = !clip.section.empty();
+                    items.push_back(it);
+                }
+                for (const auto &x : g->sections)
+                {
+                    cosmo_v2::ContextMenu::Item it{std::string(x.name == clip.section ? kBullet : kNoBullet) + "Section " + clipLabel(x.name, 24),
+                                                   [this, q = cmd::quote(clip.id + ".section=" + x.name)] { dispatch("set " + q); }};
+                    auto mmss = [](double t) {   // where it is in the song, as a clock reads it
+                        const int whole = (int)std::lround(std::max(0.0, t));
+                        char b[16];
+                        std::snprintf(b, sizeof b, "%d:%02d", whole / 60, whole % 60);
+                        return std::string(b);
+                    };
+                    it.shortcut = mmss(x.from) + "\xE2\x80\x93" + mmss(x.to);
+                    it.enabled = x.name != clip.section;
+                    items.push_back(it);
+                }
+                items.push_back(cosmo_v2::ContextMenu::Item::sep());
+                {
+                    cosmo_v2::ContextMenu::Item it{"Save Song", [this, q = cmd::quote(g->name)] { dispatch("song save " + q); }};
+                    it.enabled = g->dirty;
+                    items.push_back(it);
+                }
+                // R-SONG-7: the song as a whole project — here, on the Song page; or in the Solaris app itself
+                items.push_back({"Edit Song", [this, n = g->name] { openSong(n); }});
+                if (onOpenInSolaris) items.push_back({"Open in Solaris", [this, p = g->path] { onOpenInSolaris(p); }});
+            }
+        }
         if (!clip.audio)
         {
             // a dissolve into the next clip that TOUCHES this one on its track (R-TL-4 holds the outgoing one)
@@ -1137,10 +1191,77 @@ namespace interstellar_v1
         noteActivity();
     }
 
+    // ── R-SONG-7: the Song page — a hosted song's own window ─────────────────────────────────────
+
+    void App::importSong()
+    {
+        // R-SONG-6: the whole song on main at the playhead; the clip's own menu then chooses its version and section
+        if (!onPickSongToImport) return;
+        onPickSongToImport([this](const std::string &p) {
+            const auto &mm = mHooks.model ? mHooks.model() : emptyModel();
+            dispatch("song import " + cmd::quote(p) + " --at " + cmd::seconds(mm.playhead, mm.fps > 0 ? mm.fps : 24.0));
+        });
+    }
+
+    void App::openSong(const std::string &song)
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        std::string name = song;
+        bool hosted = false;
+        for (const auto &g : m.songs) hosted = hosted || g.name == name;
+        if (!hosted) name = m.songs.empty() ? std::string() : m.songs.front().name;
+        auto page = mEdit->songPage();
+        if (!name.empty() && name != page->song())
+        {
+            std::shared_ptr<EmbeddedView> v;
+            const auto it = mSongViews.find(name);
+            if (it != mSongViews.end()) v = it->second;
+            else if (mHooks.songView) mSongViews[name] = v = mHooks.songView(name);   // a null kept too: asked once
+            page->show(v, v ? name : std::string());
+            page->setNoWindow(!v);
+        }
+        // Interstellar's transport rests while the song's own plays — one sound at a time
+        if (m.playing) dispatch("pause");
+        mEdit->setTab(EditScreen::Song);
+        noteActivity();
+    }
+
+    void App::openSongOfClip(const std::string &clipId)
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        for (const auto &c : m.clips)
+        {
+            if (c.id != clipId || !c.song) continue;
+            const std::string stem = std::filesystem::path(c.src).stem().string();
+            for (const auto &g : m.songs)
+                if (g.src == c.src || std::filesystem::path(g.path).stem().string() == stem) { openSong(g.name); return; }
+            say(cosmo_v2::Toast::Kind::Error, "The song " + stem + " is not hosted \xE2\x80\x94 its file is offline");
+            return;
+        }
+    }
+
+    EmbeddedView *App::songViewUp() const
+    {
+        if (mScreen != Screen::Edit || mEdit->tab() != EditScreen::Song) return nullptr;
+        EmbeddedView *v = mEdit->songPage()->view();
+        if (!v) return nullptr;
+        // a modal of Interstellar's is over the page: the input is its
+        if (mSettings->isOpen() || mEdit->confirm()->isOpen() || mEdit->contextMenu()->isOpen() || mEdit->namePrompt()->isOpen()) return nullptr;
+        if (mEdit->topBar()->versions()->isOpen() || mEdit->topBar()->menus()->openIndex() >= 0) return nullptr;
+        return v;
+    }
+
+    std::string App::cursorName() const
+    {
+        EmbeddedView *v = songViewUp();
+        if (v && (mSongPress || mEdit->songPage()->deviceFrame().contains(mPointerAt))) return v->cursorName();
+        return "default";
+    }
+
     void App::requestHome()
     {
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
-        if (!m.dirty) { dispatch("project close"); return; }
+        if (!interstellar::unsaved(m)) { dispatch("project close"); return; }
         askUnsaved("Edits since the last save are lost if you close without saving.",
                    [this] { dispatch("project close"); },
                    [this] { if (dispatch("project save")) dispatch("project close"); });
@@ -1150,7 +1271,7 @@ namespace interstellar_v1
     {
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
         // unsaved edits exist only with a project open — and the dialog is the Edit screen's
-        if (!m.dirty || mScreen != interstellar::Screen::Edit) return true;
+        if (!interstellar::unsaved(m) || mScreen != interstellar::Screen::Edit) return true;
         askUnsaved("Edits since the last save are lost if you quit without saving.",
                    [this] { dispatch("project close"); if (onQuit) onQuit(); },
                    // a refused save keeps the window: the refusal is on screen (R-UI-17a)
@@ -1167,7 +1288,7 @@ namespace interstellar_v1
         {
             name = m.projectPath.substr(m.projectPath.find_last_of('/') + 1);
         }
-        return (m.dirty ? "*" : "") + name + " \xE2\x80\x94 Interstellar";
+        return (interstellar::unsaved(m) ? "*" : "") + name + " \xE2\x80\x94 Interstellar";
     }
 
     bool App::textEditing() const
@@ -1186,6 +1307,22 @@ namespace interstellar_v1
     void App::pointer(int kind, double x, double y, int button, double timeMs, bool alt, bool shift, bool ctrl)
     {
         noteActivity();
+        mPointerAt = Point{x, y};
+        // R-SONG-7: inside the Song page's frame the pointer is the song's window's — a press that began there stays
+        // its until the release, wherever the pointer goes
+        if (EmbeddedView *v = songViewUp())
+        {
+            const Rect f = mEdit->songPage()->deviceFrame();
+            const bool inside = f.contains(Point{x, y});
+            if (kind == 0 && inside && !mPointerDown) mSongPress = true;
+            if (mSongPress || (inside && !mPointerDown && kind != 2))
+            {
+                v->pointer(kind, x - f.x, y - f.y, button, timeMs, alt, shift, ctrl);
+                if (kind == 2) mSongPress = false;
+                return;
+            }
+        }
+        else if (kind == 2) mSongPress = false;
         const RawPointer::Kind k = kind == 0 ? RawPointer::Kind::Down : (kind == 2 ? RawPointer::Kind::Up : RawPointer::Kind::Move);
         if (k == RawPointer::Kind::Down) mPointerDown = true;
         RawPointer rp{};
@@ -1202,6 +1339,11 @@ namespace interstellar_v1
     void App::wheel(double x, double y, double notches, bool ctrl)
     {
         noteActivity();
+        if (EmbeddedView *v = songViewUp())   // R-SONG-7
+        {
+            const Rect f = mEdit->songPage()->deviceFrame();
+            if (f.contains(Point{x, y})) { v->wheel(x - f.x, y - f.y, notches, ctrl, false, false); return; }
+        }
         RawPointer rp{};
         rp.kind = RawPointer::Kind::Scroll;
         const double sc = std::max(0.25, mScaleAnim.value());
@@ -1238,6 +1380,9 @@ namespace interstellar_v1
             return true;
         }
         if (mEdit->namePrompt()->isOpen()) return mEdit->namePrompt()->handleKey(e);
+        // R-SONG-7: on the Song page the keys are the song's window's first (its transport, its keymap, its Ctrl+S)
+        if (EmbeddedView *v = songViewUp())
+            if (v->key(e)) return true;
         auto versions = mEdit->topBar()->versions();
         if (versions->isOpen())
         {
@@ -1332,6 +1477,9 @@ namespace interstellar_v1
             return false;
         case '1': case '2': case '3':
             mEdit->setTab(e.keyCode - '1');
+            return true;
+        case '4':
+            openSong(mEdit->songPage()->song());   // R-SONG-7
             return true;
         default:
             return false;
@@ -1635,6 +1783,9 @@ namespace interstellar_v1
         if (mToast->isShowing()) return true;                      // its hold ends on the clock, not on input
         for (const auto &n : m.rack) if (n.pending) return true;   // spinner cells turn
         if (mHooks.thumbnailEpoch && mHooks.thumbnailEpoch() != mThumbEpoch) return true;   // a still landed
+        if (mScreen == Screen::Edit && mEdit->tab() == EditScreen::Song)   // R-SONG-7: the song's window moves on its own clock
+            if (EmbeddedView *v = mEdit->songPage()->view(); v && v->needsRedraw(nowMs)) return true;
+        if (mEdit->songPage()->opacity.isAnimating()) return true;
         return nowMs - mLastActivityMs < kActiveWindowMs;
     }
 
@@ -1682,6 +1833,11 @@ namespace interstellar_v1
         const bool zooming = mScaleAnim.isAnimating();
         mScaleAnim.update(nowMs);
         if (zooming) { applyLogicalSize(); noteActivity(); }
+        // R-SONG-7: the Song page's frame in device pixels follows the drawn scale; opened with no song shown, it shows
+        // the first the project hosts
+        mEdit->songPage()->setDeviceScale(std::max(0.25, mScaleAnim.value()));
+        if (mScreen == Screen::Edit && mEdit->tab() == EditScreen::Song && !mEdit->songPage()->view() && !m.songs.empty() && mHooks.songView)
+            openSong(std::string());
         const Transform rt = rootTransform();
 
         drawRoundedRect(target, Rect{0, 0, mPhysW, mPhysH}, 0.0, Paint::filled(palette::background()));

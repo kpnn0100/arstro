@@ -45,6 +45,7 @@ namespace arstro
 {
 namespace interstellar
 {
+    class SongHost;   // R-SONG: the hosted song (apps/interstellar/song) — complete only where it is used
     class Project;
     struct Clip;
     struct RackObj;
@@ -94,6 +95,15 @@ namespace interstellar
         };
 
         using EventSink = std::function<void(const Event &)>;
+        /** R-SONG: the hosted Solaris songs and what their clips play — opaque here (ServiceSong.h), public
+         *  only so the helpers there, which are not members, can name it. */
+        struct SongState;
+        /** R-SONG: a clip's src names a Solaris song (a `.slp`). */
+        static bool isSongSrc(const std::string &src);
+        /** R-SONG-7: a hosted song by name, file or clip — what the HOST binds Solaris's own window to on the
+         *  Song page (its model is drawn; its lines come back as `song run <song> …`). Null when no such song
+         *  is hosted, or this build hosts none. The pointer lives until the song is closed (project close). */
+        SongHost *songHost(const std::string &song);
 
         InterstellarService(cosmo::ThreadBudget &budget, Host host);
         ~InterstellarService();
@@ -408,6 +418,22 @@ namespace interstellar
         bool lint();
         bool wait(const Command &c);
 
+        // R-SONG: a Solaris song, hosted (ServiceSong.cpp)
+        bool songCommand(const Command &c);
+        /** `set <aclip>.version|section=`: refused unless the song has it; on success `fields` is what to
+         *  write (the choice, and the clip's new length). */
+        bool songSelection(const NodeId &clip, const std::string &key, const std::string &value,
+                           std::vector<std::pair<std::string, std::string>> &fields, std::string &err);
+        /** R-SONG-2: the media a clip of (src, version, section) plays — the program compiled at its song's
+         *  current state, made now when the song moved since; "" when it cannot be compiled (said once). */
+        std::string songMedia(const std::string &src, const std::string &version, const std::string &section);
+        /** … that media played: its own engine, built on the calling thread (any thread). */
+        std::unique_ptr<IAudioSource> songSource(const std::string &media, int rate) const;
+        void pumpSongs();
+        void fillSongModel(AppModel &m);
+        bool saveSongs(std::string &err);
+        void closeSongs();
+
         // edit / settings / presets (ServiceEdit.cpp)
         bool editCommand(const Command &c);
         static bool undoable(Command::Kind k);
@@ -425,6 +451,7 @@ namespace interstellar
 
         cosmo::ThreadBudget &mBudget;
         Host mHost;
+        std::unique_ptr<SongState> mSongs;           // R-SONG: made with the service; its worker stops in its destructor
         std::shared_ptr<FrameSelector> mFrames;
         Rack mRack;
         std::unique_ptr<Project> mProject;

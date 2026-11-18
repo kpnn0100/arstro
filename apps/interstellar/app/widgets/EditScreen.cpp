@@ -22,10 +22,10 @@ namespace interstellar_v1
         mTransport->onCapture = [this](Rect r) { if (onCapture) onCapture(r); };
         addChild(mTransport);
 
-        for (int i = 0; i < 3; ++i)
+        for (int i = 0; i < kTabs; ++i)
         {
             mPages[i] = std::make_shared<FadePage>();
-            addChild(mPages[i]);
+            addChild(mPages[i]);   // Song last: its page is opaque, over the monitor (R-SONG-7)
         }
         auto fwd = [this](const std::string &l) { emit(l); };
         // Grade
@@ -57,6 +57,7 @@ namespace interstellar_v1
         mTimeline->onKeyRowContext = [this](const std::string &a, Point w) { if (onKeyRowContext) onKeyRowContext(a, w); };
         mTimeline->onCommand = [this](const std::string &l) { return emit(l); };
         mTimeline->onClipContext = [this](const std::string &id, Point w) { if (onClipContext) onClipContext(id, w); };
+        mTimeline->onClipOpen = [this](const std::string &id) { if (onClipOpen) onClipOpen(id); };
         mTimeline->onLaneContext = [this](const std::string &trk, double t, Point w) { if (onLaneContext) onLaneContext(trk, t, w); };
         // a source dragged out of the bin is the timeline's to place (R-UI-14)
         mBin->onDragSource = [this](const interstellar::RackNodeModel &n, Point w, SourceBin::DragPhase ph) {
@@ -84,6 +85,9 @@ namespace interstellar_v1
         mPages[Deliver]->addChild(mChecks);
         mPages[Deliver]->addChild(mOutput);
         mPages[Deliver]->addChild(mQueue);
+        // Song (R-SONG-7): a hosted song's own window, the whole body below the top bar
+        mSong = std::make_shared<SongPage>();
+        mPages[Song]->addChild(mSong);
 
         // the chrome LAST among the body, so its open dropdown hit-tests above the pages
         mTopBar = std::make_shared<EditTopBar>();
@@ -114,14 +118,15 @@ namespace interstellar_v1
                                   emit(line);
                               });
         };
-        for (int i = 0; i < 3; ++i) mPages[i]->setShownImmediate(i == mTab);
+        for (int i = 0; i < kTabs; ++i) mPages[i]->setShownImmediate(i == mTab);
     }
 
     void EditScreen::setTab(int tab)
     {
-        if (tab < 0 || tab > 2 || tab == mTab) return;
+        if (tab < 0 || tab >= kTabs || tab == mTab) return;
+        if (mTab == Song && mSong->view()) mSong->view()->hidden();   // its transport stops with the page (R-SONG-7)
         mTab = tab;
-        for (int i = 0; i < 3; ++i) mPages[i]->setShown(i == tab);
+        for (int i = 0; i < kTabs; ++i) mPages[i]->setShown(i == tab);
         mTopBar->tabs()->setSelected(tab);
         mTopBar->versions()->close();
         mTransportTarget = tab == Grade ? 0.0 : 1.0;   // the tween starts in advance (a setter has no clock)
@@ -142,6 +147,7 @@ namespace interstellar_v1
         mChecks->bind(m);
         mOutput->bind(m);
         mQueue->bind(m, nowMs);
+        mSong->bind(m);
     }
 
     void EditScreen::layout()
@@ -169,7 +175,7 @@ namespace interstellar_v1
         mTransport->opacity.set(ta);
         mTransport->visible = ta > 0.001;   // culled: hidden widgets take no input
 
-        for (int i = 0; i < 3; ++i)
+        for (int i = 0; i < kTabs; ++i)
         {
             mPages[i]->x.set(0); mPages[i]->y.set(top); mPages[i]->width.set(W); mPages[i]->height.set(std::max(0.0, H - top));
         }
@@ -188,6 +194,8 @@ namespace interstellar_v1
         place(*mOutput, W - rw, 0, rw, colH);
         place(*mQueue, 0, pageDeckY, W, deckH);
         mOutput->layout();
+        place(*mSong, 0, 0, W, std::max(0.0, H - top));
+        mSong->layout();
 
         place(*mNamePrompt, 0, 0, W, H);
         mNamePrompt->layout();

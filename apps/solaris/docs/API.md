@@ -582,6 +582,8 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `markers[].at` | number | beats |
 | `markers[].length` | number | beats — a section; 0 a point |
 | `markers[].end` | number | where its section ends: at + length, else the next marker, else the song's end |
+| `markers[].seconds` | number | where `at` is heard, through the tempo map |
+| `markers[].endSeconds` | number | where `end` is heard |
 | `songChords` | object[] | R-ASSIST-1: the song's chords, by time — what `chords detect` heard (`chords` is `--chord`'s vocabulary) |
 | `songChords[].id` | string | cd_n |
 | `songChords[].name` | string | C, Am, F#, Bbm — a major or minor triad |
@@ -638,6 +640,7 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `matrix` | object | the routing matrix (R-MIX-9), computed once for every face |
 | `matrix.columns` | string[] | its columns: every strip some strip may or does reach (processing order), "master", the output ports — every route and key has a cell |
 | `lengthBeats` | number | where the last clip ends |
+| `lengthSeconds` | number | where the last clip ends, heard (through the tempo map) |
 | `audit` | string[] | the last `audit`'s findings |
 | `lastError` | string | the last refusal or failure |
 | `recents` | object[] | Home's cards, newest first (R-HOME-1) |

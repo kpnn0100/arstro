@@ -67,6 +67,20 @@ static AppModel populatedModel()
     TrackModel t; t.id = "trk_1"; t.name = "v0"; m.tracks.push_back(t);
     ClipModel c; c.id = "clp_1"; c.name = "shotA"; c.track = "trk_1"; c.src = "ro_2"; c.out = 4; c.duration = 4;
     m.clips.push_back(c);
+    {   // R-SONG: a hosted song, so its fields are written
+        SongModel g;
+        g.name = "trap";
+        g.path = "/home/u/songs/trap.slp";
+        g.src = "songs/trap.slp";
+        g.versions.push_back({"main", "main", "", false, ""});
+        g.sections.push_back({"mk_1", "Drop", 1.6, 4.8});
+        m.songs.push_back(g);
+        // … and a clip of it, its lanes drawn (R-SONG-8)
+        ClipModel sc; sc.id = "aclp_1"; sc.name = "trap"; sc.track = "atrk_1"; sc.src = "songs/trap.slp"; sc.audio = true; sc.song = true;
+        sc.out = 3.2; sc.section = "Drop"; sc.songError = "x";
+        sc.songLanes.push_back({"Drums", 2, {{0.0, 1.5}}});
+        m.clips.push_back(sc);
+    }
     m.transitions.push_back({"tr_1", "clp_1", "clp_2", "dissolve", 0.5});
     m.markers.push_back({"mk_1", "chorus", 48, "chorus in"});
     m.useProxies = true;
@@ -250,7 +264,7 @@ int main()
                 assert(!contains(s, "\"" + f.path + "\""));
         o.json = false;
         const std::string flat = formatModel(m, o);
-        assert(contains(flat, "rack[1].bindName=\"s_day01\"") && contains(flat, "clips.count=1"));
+        assert(contains(flat, "rack[1].bindName=\"s_day01\"") && contains(flat, "clips.count=2"));
     });
 
     test("grade params dump under the keys `set` writes", [] {

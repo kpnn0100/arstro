@@ -336,6 +336,8 @@ namespace schema
             ref<AClip>("track", &AClip::track, 0, true),
             ref<AClip>("timeline", &AClip::timeline, 0, false, explicitTimeline<AClip>()),
             text<AClip>("src", &AClip::src, 0, true),
+            text<AClip>("version", &AClip::version, 0, true, nonEmpty<AClip>(&AClip::version)),   // R-SONG
+            text<AClip>("section", &AClip::section, 0, true, nonEmpty<AClip>(&AClip::section)),
             time<AClip>("at", &AClip::at, 0.0, 0, true),
             time<AClip>("in", &AClip::in, 0.0, 0, true),
             time<AClip>("out", &AClip::out, 0.0, 0, true),

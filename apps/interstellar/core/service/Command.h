@@ -51,6 +51,8 @@ namespace interstellar
             FxAdd, FxDelete,
             // audio subset (R-AUD-2)
             AudioTrackAdd, AudioClipAdd,
+            // a Solaris song, hosted (R-SONG)
+            SongOpen, SongImport, SongRun, SongSave,
             // edit, settings, presets (R-EDIT, R-SET) — cosmo's File/Edit/Settings/Preset menus
             Undo, Redo, GradeCopy, GradePaste, RackUngroup, SettingsSet, PresetApply, PresetSave,
             PresetImport, RackRemove, Capture,
@@ -93,6 +95,9 @@ namespace interstellar
         std::string summary;
         std::string requirement;        // the R- id that asked for it
         bool fieldArgs = false;         // positionals are address=value pairs (`set`)
+        /** R-SONG-4: after the first positional, the REST of the line is one argument, kept as written
+         *  — another app's command line, whose own `--flags` and quotes are its grammar's, not ours. */
+        bool rawTail = false;
     };
 
     const std::vector<CommandSpec> &commandSpecs();

@@ -24,6 +24,13 @@
 │ rack     arstro::cosmo             a REAL hosted CosmoService — THE colour      │
 │          authority. Driven by cosmo::Command; read through cosmo::AppModel.     │
 ├────────────────────────────────────────────────────────────────────────────────┤
+│ song     arstro::solaris           a REAL hosted SolarisService per song clip's │
+│          interstellar_song         song (R-SONG) — the ONE core target that     │
+│                                    sees Solaris; its clips play it LIVE through │
+│                                    Solaris's engine; Interstellar sees SongHost.h│
+│          interstellar_song_ui      Solaris's OWN window on the Song page — the  │
+│                                    one front-end target that sees Solaris's app │
+├────────────────────────────────────────────────────────────────────────────────┤
 │ engines  arstro  ImageProcessing   EditEngine · EditParams · **Volume** (new)    │
 │          gene    core/Gene         the shared expression language                │
 └────────────────────────────────────────────────────────────────────────────────┘
@@ -42,6 +49,8 @@ the user means by "grade like cosmo, and it really is the same project" falls ou
 | `RackAccess` | the hosted `CosmoService` | lets the evaluator be tested with a three-line fake and no display |
 | `Volume` | `arstro_image` | **new** — §3 |
 | `cosmo::Command` / `cosmo::AppModel` | cosmo itself | the ONLY way colour is read or written |
+| `SongHost` (`song/SongHost.h`) | a hosted `SolarisService` | the ONLY way a song is read, played, edited or written (R-SONG); its types are its own, because the two apps' service headers share names. A `Program` (a version compiled by Solaris) crosses threads; each reader builds its own engine from it |
+| `EmbeddedView` (`app/widgets/EmbeddedView.h`) | the host, with `interstellar_song_ui` | another app's window in a frame of this one (R-SONG-7): the front end gives it a frame, input and a paint, and knows no type of it — so Solaris's real window is the Song page, and `interstellar_app` still links no service |
 
 ### 2.1 How a video source reaches Cosmo without changing Cosmo
 
@@ -139,6 +148,11 @@ Every module, its layer, and the requirement that justifies it.
 | `apps/interstellar/core/AudioOut.h` | core | **built** — the sound output seam; its blocking write is the playback clock (R-AUD-6) |
 | `apps/interstellar/host/AudioOutPulse` | host | **built** — PulseAudio simple API (PipeWire serves it), ~60 ms buffer; optional at build |
 | `apps/interstellar/core/AudioSource.h` | core | **built** — the audio decode seam (stereo float at the mix rate) |
+| `apps/interstellar/song/SongHost.{h,cpp}` | song | **built** — `interstellar_song`: a Solaris song hosted (open, run a line, save, the file watch; a version compiled into a `Program`, played by a `Stream` — its own engine, in `render`'s chunks) (R-SONG, DR-SONG-1) |
+| `apps/interstellar/song/SongView.{h,cpp}` | song (front end) | **built** — `interstellar_song_ui`: Solaris's `App` over a hosted song, as an `EmbeddedView`; its lines out as `song run`; Solaris's accent while it works (R-SONG-7, DR-SONG-2) |
+| `apps/interstellar/core/service/ServiceSong.{h,cpp}` | core | **built** — song clips: the songs and their generations, the programs and the media that name them, the live source, the `song` verbs, the model (lanes) (R-SONG, DR-SONG-1) |
+| `apps/interstellar/app/widgets/EmbeddedView.h` | app | **built** — the seam for another app's window (R-SONG-7, DR-SONG-2) |
+| `apps/interstellar/app/widgets/SongPage.{h,cpp}` | app | **built** — Edit's fourth tab: the hosted song's window in its frame, or its empty state (R-SONG-7, DR-SONG-2) |
 | `apps/interstellar/host/AudioSourceFFmpeg` | host | **built** — decode, resample, fold to stereo (mono at unity), seek with pre-roll (DR-AUD-2) |
 | `apps/interstellar/render/Lut.{h,cpp}` | render | **built** — `.cube` read (1D/3D), tetrahedral apply, write (R-COLOR-5/6, DR-COLOR-4) |
 | `apps/interstellar/render/Composite.{h,cpp}` | render | **built** — geometry · fit · blend · the one-base dissolve (R-FX-3, DR-FX-3); 8- or 16-bit, one templated loop (DR-COLOR-1) |

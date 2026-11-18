@@ -65,6 +65,12 @@ namespace interstellar
             if (l.mute || (anySolo && !l.solo)) continue;
             render::AudioItem it;
             it.media = resolvePath(a.src);
+            if (isSongSrc(a.src))
+            {
+                // R-SONG-2: the song played live — the program of what it asks for, as the song stands now
+                it.media = songMedia(a.src, a.version, a.section);
+                if (it.media.empty()) continue;
+            }
             it.at = a.at;
             it.in = a.in;
             it.out = a.out;
@@ -120,7 +126,13 @@ namespace interstellar
         auto it = cache.find(key);
         if (it != cache.end()) return it->second.get();
         std::unique_ptr<IAudioSource> s;
-        if (mHost.audioSource)
+        if (media.compare(0, 5, "song:") == 0)   // R-SONG-2: the song played live by its own engine, not a file
+        {
+            s = songSource(media, rate);
+            IAudioSource::Info info;
+            if (s && !s->open(media, rate, info)) s.reset();
+        }
+        else if (mHost.audioSource)
         {
             s = mHost.audioSource();
             IAudioSource::Info info;
@@ -343,6 +355,7 @@ namespace interstellar
     {
         if (!mPeaks || media.empty()) return;
         PeakStore &ps = *mPeaks;
+        if (media.compare(0, 5, "song:") == 0) return;   // R-SONG-8: a song clip draws its lanes, not a waveform
         {
             std::lock_guard<std::mutex> l(ps.mu);
             if (!mIspPath.empty())

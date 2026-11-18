@@ -29,6 +29,9 @@
 #include "Thumbnailer.h"
 #include "VideoFrameDecoder.h"
 #include "../../core/Artboard/src/adapter/native/CairoTarget.h"
+#if INTERSTELLAR_HAVE_SONG_UI
+#include "SongView.h"       // R-SONG-7: Solaris's own window for a hosted song (its headers stay behind it)
+#endif
 #include "anim/Motion.h"
 #include "core/AppSettings.h"
 #include "core/ThreadBudget.h"
@@ -113,7 +116,22 @@ namespace
         GtkWidget *area = nullptr;
         gint64 startUs = 0;
         int minW = 0, minH = 0;   // the size request last given to the drawing area
+        std::string cursor = "default";   // the pointer's shape shown now (R-SONG-7: the Song page's window says its own)
     };
+
+    // the App says what the pointer looks like (the Song page's window has resize edges and grips); the window shows
+    // the OS's own cursor for it, when it changes
+    void showCursor(Host *a)
+    {
+        const std::string want = a->app->cursorName();
+        if (want == a->cursor) return;
+        GdkWindow *w = gtk_widget_get_window(a->area);
+        if (!w) return;
+        a->cursor = want;
+        GdkCursor *cur = want == "default" ? nullptr : gdk_cursor_new_from_name(gdk_window_get_display(w), want.c_str());
+        gdk_window_set_cursor(w, cur);   // null: the parent's — the arrow
+        if (cur) g_object_unref(cur);
+    }
 
     double nowMs(const Host &a) { return a.startUs == 0 ? 0.0 : (g_get_monotonic_time() - a.startUs) / 1000.0; }
     int mapButton(guint b) { return b == 3 ? 2 : 0; }
@@ -394,6 +412,7 @@ namespace
         a->app->pointer(e->type == GDK_BUTTON_PRESS ? 0 : 2, e->x, e->y, mapButton(e->button), nowMs(*a),
                         (e->state & GDK_MOD1_MASK) != 0, (e->state & GDK_SHIFT_MASK) != 0,
                         (e->state & GDK_CONTROL_MASK) != 0);
+        showCursor(a);
         gtk_widget_queue_draw(a->area);
         return TRUE;
     }
@@ -403,6 +422,7 @@ namespace
         auto *a = static_cast<Host *>(user);
         a->app->pointer(1, e->x, e->y, 0, nowMs(*a), (e->state & GDK_MOD1_MASK) != 0,
                         (e->state & GDK_SHIFT_MASK) != 0, (e->state & GDK_CONTROL_MASK) != 0);
+        showCursor(a);
         gtk_widget_queue_draw(a->area);
         return TRUE;
     }
@@ -531,6 +551,28 @@ int main(int argc, char **argv)
         return a->svc.renderSourceFrame(bind, t, edge, out);
     };
     hooks.copyFrame = [a](const std::string &bind, std::string &err) { return copyFrame(a, bind, err); };
+#if INTERSTELLAR_HAVE_SONG_UI
+    // R-SONG-7: the Song page — Solaris's own window over the hosted song; its every line comes back as
+    // Interstellar's `song run <song> <line>` (one step of the song's history, journaled like any other)
+    hooks.songView = [a](const std::string &song) -> std::shared_ptr<interstellar_v1::EmbeddedView> {
+        SongHost *h = a->svc.songHost(song);
+        if (!h) return nullptr;
+        SongViewHooks k;
+        k.dispatch = [a, song](const std::string &line, std::string &err) {
+            std::string q = song;
+            if (q.empty() || q.find_first_of(" \t\"") != std::string::npos) q = "\"" + q + "\"";
+            return a->svc.dispatchText("song run " + q + " " + line, err);
+        };
+        k.onBack = [a] { a->app->setTab(interstellar_v1::EditScreen::Cut); };
+        k.onPickFile = [a](const std::string &title, std::function<void(const std::string &)> done) {
+            pickFile(a, false, title.c_str(), "All files", {"*"}, std::string(), std::string(), done);
+        };
+        k.onCopy = [a](const std::string &text) {
+            gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD), text.c_str(), -1);
+        };
+        return makeSongView(*h, k);
+    };
+#endif
     a->app = std::make_unique<App>(hooks, (double)kW, (double)kH);
     a->app->onPickProjectToOpen = [a] { pickProjectToOpen(a); };
     a->app->onPickProjectToCreate = [a] { pickProjectToCreate(a); };
@@ -544,6 +586,34 @@ int main(int argc, char **argv)
     };
     a->app->onPickTimelineToExport = [a](const std::string &name, std::function<void(const std::string &)> done) {
         pickFile(a, true, "Export timeline", "Timelines (EDL, FCPXML, OTIO)", {"*.edl", "*.fcpxml", "*.otio"}, name, ".fcpxml", done);
+    };
+    a->app->onPickSongToImport = [a](std::function<void(const std::string &)> done) {   // R-SONG-6
+        pickFile(a, false, "Import song", "Solaris songs", {"*.slp", "*.SLP"}, std::string(), std::string(), done);
+    };
+    a->app->onOpenInSolaris = [a](const std::string &path) {
+        // R-SONG-6: the song in Solaris's own window. Its save reaches the hosted song through the file
+        // watch, so nothing comes back over a pipe. $SOLARIS_BIN, else the build tree's sibling, else PATH.
+        std::string bin;
+        if (const char *e = g_getenv("SOLARIS_BIN")) bin = e;
+        if (bin.empty())
+        {
+            if (gchar *self = g_file_read_link("/proc/self/exe", nullptr))
+            {
+                gchar *dir = g_path_get_dirname(self);
+                const std::string sib = std::string(dir) + "/../solaris/solaris";
+                g_free(dir);
+                g_free(self);
+                if (g_file_test(sib.c_str(), G_FILE_TEST_IS_EXECUTABLE)) bin = sib;
+            }
+        }
+        if (bin.empty()) bin = "solaris";
+        gchar *argv[] = {const_cast<gchar *>(bin.c_str()), const_cast<gchar *>(path.c_str()), nullptr};
+        GError *err = nullptr;
+        if (!g_spawn_async(nullptr, argv, nullptr, G_SPAWN_SEARCH_PATH, nullptr, nullptr, nullptr, &err))
+        {
+            a->app->say(cosmo_v2::Toast::Kind::Error, std::string("Solaris did not start: ") + (err ? err->message : "unknown"));
+            if (err) g_error_free(err);
+        }
     };
     a->app->onPickCaptionsToImport = [a](std::function<void(const std::string &)> done) {   // R-DLV-1
         pickFile(a, false, "Import captions", "Captions (SRT)", {"*.srt", "*.SRT"}, std::string(), std::string(), done);

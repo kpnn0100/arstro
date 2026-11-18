@@ -1,4 +1,5 @@
 #include "ServiceInternal.h"
+#include "ServiceSong.h"
 #include "ApiDoc.h"
 #include "AppModelCodec.h"
 #include "Arrange.h"
@@ -88,6 +89,7 @@ namespace interstellar
           mProject(new Project()), mCache(new render::FrameCache()), mSync(new RenderCtx())
     {
         mGrade = mSync->grade.get();
+        mSongs.reset(new SongState());   // R-SONG: its worker starts with the first render
         if (mHost.asyncPreview)
         {
             mPreview.reset(new PreviewWorker());
@@ -313,6 +315,8 @@ namespace interstellar
             case CK::AudioTrackAdd: case CK::AudioClipAdd: case CK::ClipCopy: case CK::ClipPaste:
                 ok = requireProject() && arrangeCommand(c);
                 break;
+            case CK::SongOpen: case CK::SongRun: case CK::SongSave: ok = songCommand(c); break;   // R-SONG
+            case CK::SongImport: ok = requireProject() && songCommand(c); break;
 
             case CK::EffectAdd: case CK::EffectRemove: case CK::EffectMove:
                 ok = requireProject() && effectCommand(c);
@@ -468,6 +472,7 @@ namespace interstellar
                 refreshModel();
             }
         }
+        pumpSongs();     // R-SONG: renders queued, landed, said
         pumpJobs();
         pumpProxies();   // R-MEDIA-2
         pumpTracks();    // R-CLR-2
@@ -860,9 +865,11 @@ namespace interstellar
                 cm.duration = std::max(0.0, a.out - a.in);
                 cm.gain = a.gain;
                 cm.audio = true;
+                cm.version = a.version;   // R-SONG: a song clip's — fillSongModel gives it its media
+                cm.section = a.section;
                 cm.media = resolvePath(a.src);
                 cm.offline = !fs::exists(cm.media);
-                if (!cm.offline) requestPeaks(cm.media);   // R-AUD-7: its envelope, computed once
+                if (!cm.offline && !isSongSrc(a.src)) requestPeaks(cm.media);   // R-AUD-7: its envelope, computed once
                 cm.provenance = prov(a.id);
                 m.clips.push_back(cm);
             }
@@ -997,6 +1004,7 @@ namespace interstellar
         }
         m.workingSpace = render::colour::known(render::colour::workings(), mProject->colorspace) ? mProject->colorspace : std::string("rec709");
         fillSoundModel(m);
+        fillSongModel(m);   // R-SONG: after the clips — it marks the song clips
         // R-EDT-1/2
         m.shuttle = mPlaying ? mShuttle : 0.0;
         m.markIn = mMarkIn;
@@ -1298,6 +1306,9 @@ namespace interstellar
             for (auto &ro : mProject->rackObjs) rebase(ro.media);
             for (auto &a : mProject->audioClips) rebase(a.src);
         }
+        // R-SONG-5: the songs it hosts, each to its own .slp, first — a project saved with an edited song
+        // left unwritten would read as saved while the edit was not
+        if (!saveSongs(err)) return fail("project save: a song did not save: " + err);
         if (!mProject->save(target, err)) return fail("project save: " + err);
         removeAutosave();   // R-DLV-5: what it held is in the file now
         mAutosaveDueMs = 0;
@@ -1317,6 +1328,7 @@ namespace interstellar
         mAutosaveDueMs = 0;
         const bool was = mOpen;
         mOpen = false;
+        closeSongs();   // R-SONG: an edit not saved is given up with the project's ("Don't save")
         mPending.reset();
         mPlaying = false;
         mProject.reset(new Project());
@@ -2282,6 +2294,13 @@ namespace interstellar
                     Fields kv = {{"fadeIn", value}, {"fadeOut", value}};
                     if (!setFields(P, tl, id, kv, err)) return fail(err);
                 }
+                else if (owner == ParamOwner::AudioClip && (key == "version" || key == "section"))
+                {
+                    // R-SONG-3: only what the song has; the clip then covers what it chose, from its start
+                    Fields kv;
+                    if (!songSelection(id, key, value, kv, err)) return fail(address + ": " + err);
+                    if (!setFields(P, tl, id, kv, err)) return fail(err);
+                }
                 else if (!setField(P, tl, id, key, value, err))
                     return fail(err);
             }
@@ -3214,6 +3233,9 @@ namespace interstellar
             }
             case CK::AudioClipAdd:
             {
+                // R-SONG-1: a song is not a sound file — what it plays is a version and a section, rendered
+                if (isSongSrc(c.flag("src")))
+                    return fail("audio clip add: " + c.flag("src") + " is a Solaris song — `song import " + c.flag("src") + "` places it, choosing its version and section");
                 const NodeId track = P.idForRef(c.flag("track"));
                 const Track *vt = P.track(track);
                 if (!P.audioTrack(track) && !(vt && vt->audio())) return fail("audio clip add: no audio track named " + c.flag("track"));

@@ -88,6 +88,17 @@ Two forms, told apart by whether `src` is present.
   gain=0.0 fadeIn=0.250 fadeOut=1.000 loop=false
 ```
 
+**Song clip** (Interstellar, R-SONG): a sample clip whose `src` is a Solaris song. What it plays is
+that song played live by Solaris's engine — never a bounce stored beside it — so an edit to the song
+is heard from the next block played.
+```
+#aclip id=aclp_1 name=trap track=atrk_1 src=songs/trap.slp version=Instrumental section=Chorus
+  at=12.000 in=0.000 out=16.000
+```
+`version` names a Solaris version (absent = `main`); `section` a marker of that version, the clip
+covering its section (absent = the whole song). `in`/`out` are seconds into what the version and
+section play; `out` past the section's length reaches into the song's tail.
+
 **Note clip** (Solaris):
 ```
 #aclip id=ac_2 name=bassline track=atr_2 at=0.000 length=8.000
@@ -244,6 +255,7 @@ deleted, which is a node that should not exist.
 |---|---|---|
 | `#atrack kind=audio`, `gain`, `pan`, `mute`, `order` | **yes** | yes |
 | `#aclip` sample form, `at`/`in`/`out`/`gain`/`fade` | **yes** | yes |
+| `#aclip` song form (`src=<.slp>`, `version`, `section`) | **yes** — a hosted Solaris plays it live | — (it is a song *in* a video) |
 | master sum, `masterGain` | **yes** | yes |
 | `#atrack kind=instrument \| bus`, `#asend` | parsed, preserved, **refused at render** | yes |
 | `#aclip` note form, `#note` | parsed, preserved, not rendered | yes |

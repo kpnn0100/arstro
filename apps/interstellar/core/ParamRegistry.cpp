@@ -130,6 +130,8 @@ namespace interstellar
             {O::AudioClip, "<aclip>.out", "", "out", PK::Scalar, "s", 0, 0, 0, "Source out-point."},
             {O::AudioClip, "<aclip>.gain", "", "gain", PK::Scalar, "dB", -60, 12, 0, "Clip gain."},
             {O::AudioClip, "<aclip>.fade", "", "fade", PK::Scalar, "s", 0, 10, 0, "Fade in and out length."},
+            {O::AudioClip, "<aclip>.version", "", "version", PK::Text, "", 0, 0, 0, "R-SONG: a song clip's Solaris version (main = its root)."},
+            {O::AudioClip, "<aclip>.section", "", "section", PK::Text, "", 0, 0, 0, "R-SONG: a song clip's section — a marker's name (\"\" = the whole song)."},
 
             // ── caption (R-DLV-1) ──
             {O::Caption, "<caption>.at", "", "at", PK::Scalar, "s", 0, 0, 0, "Timeline time the words appear."},

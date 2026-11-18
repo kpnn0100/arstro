@@ -104,6 +104,23 @@ namespace interstellar_v1
                     if (peaksFor(c.media, pk, per)) { Wave &w = mWaves[c.media]; w.peaks = std::move(pk); w.perSecond = per; }
                 }
         }
+        // R-SONG-8: a song clip's lanes — placed as they are the first time, cross-faded when an edit moves them
+        for (const auto &c : m.clips)
+        {
+            if (!c.song) continue;
+            auto same = [](const std::vector<interstellar::ClipModel::SongLane> &a, const std::vector<interstellar::ClipModel::SongLane> &b) {
+                if (a.size() != b.size()) return false;
+                for (size_t i = 0; i < a.size(); ++i)
+                    if (a[i].name != b[i].name || a[i].colour != b[i].colour || a[i].spans != b[i].spans) return false;
+                return true;
+            };
+            auto it = mSongLanes.find(c.id);
+            if (it == mSongLanes.end()) { mSongLanes[c.id].cur = c.songLanes; continue; }
+            if (same(it->second.cur, c.songLanes)) continue;
+            it->second.prev = it->second.cur;
+            it->second.cur = c.songLanes;
+            it->second.wanted = true;   // the tween starts in advance (a setter has no clock)
+        }
         mFps = m.fps > 0 ? m.fps : 24.0;
         if (!mLaneDragging) mLaneHTarget = m.settings.keyLaneHeight > 0 ? m.settings.keyLaneHeight : 140.0;   // R-ANIM-8
         mDuration = std::max(0.0, m.duration);
@@ -645,6 +662,15 @@ namespace interstellar_v1
             }
             return true;
         }
+        case Gesture::Type::DoubleClick:
+        {
+            // R-SONG-7: a song clip opens its song — the whole project — on the Song page
+            int edge = 0;
+            const std::string id = clipAt(local, edge);
+            const auto mc = mModelClips.find(id);
+            if (!id.empty() && mc != mModelClips.end() && mc->second.song && onClipOpen) onClipOpen(id);
+            return true;
+        }
         case Gesture::Type::RightClick:
         {
             int edge = 0;
@@ -755,6 +781,17 @@ namespace interstellar_v1
 
     void Timeline::advance(double nowMs)
     {
+        for (auto &kv : mSongLanes)
+        {
+            SongLanes &s = kv.second;
+            if (s.wanted)
+            {
+                s.amount.set(0.0);   // the old picture whole, the new one not yet: the cross-fade's start
+                s.amount.animateTo(1.0, motion::kCrossFadeMs, Easing::EaseInOutCubic, nowMs);
+                s.wanted = false;
+            }
+            s.amount.update(nowMs);
+        }
         // R-UI-18b: the CUT FROZEN strip opens and closes eased; the tracks follow its live height
         if (!mFrozenInit && mEverBound) { mFrozenAmt.set(mFrozen ? 1.0 : 0.0); mFrozenApplied = mFrozen; mFrozenInit = true; }
         if (mFrozen != mFrozenApplied)
@@ -1061,7 +1098,40 @@ namespace interstellar_v1
                     }
                 }
             }
-            if (c.provenance == interstellar::Provenance::Dangling || c.offline)
+            if (c.song && r.w > 4.0)
+            {
+                // R-SONG-8: the song's lanes, each a row of its clips over the span the clip plays — a project inside
+                // the clip, not a wave. The rows share the clip's lower two thirds; an edit's new picture cross-fades
+                const auto sl = mSongLanes.find(c.id);
+                if (sl != mSongLanes.end())
+                {
+                    const double k = sl->second.amount.value();
+                    const double top = r.y + r.h * 0.36, bottom = r.bottom() - 2.0;
+                    const double inStart = an.at.value();
+                    t.save();
+                    t.clipRect(r.x + 1.0, r.y, std::max(0.0, r.w - 2.0), r.h);
+                    auto drawLanes = [&](const std::vector<interstellar::ClipModel::SongLane> &lanes, double alpha) {
+                        if (alpha <= 0.001 || lanes.empty() || bottom <= top) return;
+                        const double rowH = (bottom - top) / (double)lanes.size();
+                        for (size_t i = 0; i < lanes.size(); ++i)
+                        {
+                            const double y = top + rowH * (double)i, hgt = std::max(1.0, rowH - (rowH > 3.0 ? 1.0 : 0.0));
+                            for (const auto &sp : lanes[i].spans)
+                            {
+                                if (sp.second <= c.in || sp.first >= c.out) continue;
+                                const double x0 = timeToX(inStart + (std::max(sp.first, c.in) - c.in));
+                                const double x1 = timeToX(inStart + (std::min(sp.second, c.out) - c.in));
+                                if (x1 - x0 < 0.5) continue;
+                                drawRoundedRect(t, Rect{x0, y, x1 - x0, hgt}, radius::hairline(), Paint::filled(fade(palette::foreground(), 0.30 * alpha)));
+                            }
+                        }
+                    };
+                    drawLanes(sl->second.prev, a * (1.0 - k));
+                    drawLanes(sl->second.cur, a * k);
+                    t.restore();
+                }
+            }
+            if (c.provenance == interstellar::Provenance::Dangling || c.offline || (c.song && !c.songError.empty()))
             {
                 // hatching: the honest picture of "this is not really here"
                 t.save();
