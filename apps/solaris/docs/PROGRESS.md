@@ -64,7 +64,7 @@ line; runs beside it.
 - `[ ]` The melody and sound-design skills are written for a developer running the lab servers;
   each needs an "inside Solaris" section before an in-app agent is given them.
 
-**► K2** — the sound design skill remade on the analog synth, and a future bass song (good, energetic) for the user to judge. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► K3** — the user judges songs-002 (future bass on the analog synth) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -1048,7 +1048,17 @@ good UI UX, physical base (math base) and follow music industrial standard / lea
       an LFO on the beat; registry `analog`, 59 parameters. Here with no engine or service code: its latency
       compensated, its LFO on the song's beat (L2 test; mutant seen red). Its face draws the unison, the pulse and
       the ladder's response (shot `analog-window`).
-- [ ] **K2** The sound design skill removed and remade on the analog synth; a future bass song, good and energetic.
+- [x] **K2** The sound design skill removed and remade on the analog synth; a future bass song, good and energetic.
+      — `.claude/skills/arstro.solaris.sound.design/` rewritten whole: SKILL.md (the method; "if three honest tries
+      at a patch fail, the instrument is the limit"), references/analog-patches.md (the synth's controls in a sound
+      designer's terms, every patch and why, the level targets), references/research.md (Szabo, Zavalishin, band-limited
+      steps, Serum/Massive practice, future bass guides — and what was not found), taste.md (the user's verdicts kept as
+      eight lessons), scripts/futurebass.py (whole songs — intro, verse, build, drop, break, build, bigger drop, outro —
+      every synth part an `analog` patch; `--check`; a levelling pass to per-element targets; measures per section),
+      scripts/lab.py. songs-002 in the Sound Lab: Hold the Sky (E minor, 150) and Wildfire Hearts (D major, 140).
+      Measured on Hold the Sky: the drop 5.3 LU over the verse, the kick's hit 7.1 dB over the mix, the kick ducking
+      the sub 8.2 dB, peak −0.7 dBFS. The lab's timeline names a song's sections.
+- [ ] **K3** The user's verdicts on songs-002 → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

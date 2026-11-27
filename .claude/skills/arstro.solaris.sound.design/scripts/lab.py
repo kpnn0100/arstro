@@ -4,7 +4,7 @@ folder, its verdicts going to THIS skill's ledger.
 
     python3 lab.py [--port 8788] [--lab ~/Music/Solaris/sound-lab]
 
-Binds 127.0.0.1 only. Every batch folder (fb-NNN, from futurebass.py) is a choice in the page's menu; every section a
+Binds 127.0.0.1 only. Every batch folder (songs-NNN from futurebass.py; fb-NNN are older section clips) is a choice in the menu; every song a
 card — play it whole or any element alone, read its recipe and measurements, judge it, say why.
 """
 import argparse, os, sys

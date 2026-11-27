@@ -67,7 +67,7 @@
   .empty { color: var(--muted); padding: 40px 0; text-align: center; }
   .card.song .title { font-size: 18px; letter-spacing: -0.01em; }
   .card.song svg.roll { height: 230px; }
-  .seg { display: inline-flex; background: var(--raised); border: 1px solid var(--line); border-radius: 6px; padding: 2px; }
+  .seg { display: inline-flex; flex-wrap: wrap; background: var(--raised); border: 1px solid var(--line); border-radius: 6px; padding: 2px; }
   .seg button { background: none; border: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; color: var(--muted);
                 font-size: 12px; transition: background .18s, color .18s; }
   .seg button.on { background: var(--accent); color: #fff; }
@@ -138,10 +138,17 @@ function timeline(m) {                                  // a sound section: its 
   for (const [k, v] of Object.entries({viewBox: `0 0 ${W} ${H}`, class: "roll timeline", preserveAspectRatio: "none",
                                        role: "img", "aria-label": "timeline"})) svg.setAttribute(k, v);
   let s = "";
+  const secs = m.sections || [];                         // a whole song: its sections named on the timeline
+  for (const [i, sc] of secs.entries()) {
+    const x = 4 * sc.bar / beats * W;
+    s += `<rect x="${x}" y="0" width="${4 * sc.bars / beats * W}" height="${H}" fill="${i % 2 ? 'rgba(255,255,255,0.03)' : 'none'}"/>`;
+    s += `<text x="${x + 5}" y="15" fill="#159387" font-size="11" font-family="system-ui" letter-spacing="1.2">${sc.name.toUpperCase()}</text>`;
+  }
   for (let b = 0; b < bars; b++) {
     const x = 4 * b / beats * W;
-    s += `<line x1="${x}" x2="${x}" y1="0" y2="${H}" stroke="${b % 4 === 0 ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.06)'}"/>`;
-    if (b % 2 === 0) s += `<text x="${x + 4}" y="14" fill="#8a8a8a" font-size="10" font-family="system-ui">${b + 1}</text>`;
+    const edge = secs.length ? secs.some(sc => sc.bar === b) : b % 4 === 0;
+    s += `<line x1="${x}" x2="${x}" y1="${secs.length && !edge ? 26 : 0}" y2="${H}" stroke="${edge ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.06)'}"/>`;
+    if (!secs.length && b % 2 === 0) s += `<text x="${x + 4}" y="14" fill="#8a8a8a" font-size="10" font-family="system-ui">${b + 1}</text>`;
   }
   s += `<line class="head" x1="-10" x2="-10" y1="0" y2="${H}" stroke="#fff" stroke-width="2" opacity="0.85"/>`;
   svg.innerHTML = s;
@@ -205,6 +212,7 @@ function why(m) {
     if (k.sub_duck_db !== undefined) bits.push(`the kick ducks the sub ${k.sub_duck_db} dB and lets it back within 200 ms`);
     if (k.supersaw_centroid_hz !== undefined) bits.push(`the supersaw's spectral centre ${k.supersaw_centroid_hz} Hz (sharpness)`);
     if (k.kick_hit_db !== undefined) bits.push(`the kick hits ${k.kick_hit_db} dB over the mix (punch)`);
+    if (k.drop_over_verse_lu !== undefined) bits.push(`the drop ${k.drop_over_verse_lu} LU over the verse (energy)`);
     return bits.join(" · ");
   }
   if (m.song) {
@@ -229,7 +237,7 @@ function card(m, i) {
   const c = el("section", {class: m.song ? "card song" : "card", id: m.id});
   c.append(el("div", {class: "head"}, m.sound
     ? `<span class="num">#${String(i + 1).padStart(2, "0")}</span><span class="title">${m.title}</span>
-       <span class="meta">${m.style_label} · ${m.key} · ${m.bpm} bpm · 0:${String(m.seconds).padStart(2, "0")}</span>`
+       <span class="meta">${m.style_label} · ${m.key} · ${m.bpm} bpm · ${Math.floor(m.seconds / 60)}:${String(m.seconds % 60).padStart(2, "0")}</span>`
     : m.song
     ? `<span class="num">#${String(i + 1).padStart(2, "0")}</span><span class="title">${m.title}</span>
        <span class="meta">${m.style_label} · ${m.key} · ${m.bpm} bpm · ${m.metrics.seconds ? `${Math.floor(m.metrics.seconds / 60)}:${String(m.metrics.seconds % 60).padStart(2, "0")} · ${m.sections.length} sections` : m.sections.filter(sc => sc.name !== "intro").map(sc => `${sc.name} ${sc.bars}`).join(" · ") + " bars"}</span>`
@@ -366,8 +374,8 @@ async function load(name) {
   const sound = batch.kind === "sound";
   document.getElementById("legend").style.display = sound ? "none" : "";
   document.getElementById("intro").innerHTML = sound
-    ? `Each card is one SECTION of a track — judge its <b>sound design</b>, not its melody. Play <b>full</b>, then each
-       element alone (the switch beside the play button) — every element carries its own space, so its solo is the sound
+    ? `Each card is a song, or one section of a track — judge how it <b>sounds</b>. Click the timeline to jump to a
+       section. Play <b>full</b>, then any element alone (the switch beside the play button) — every element carries its own space, so its solo is the sound
        as designed. Then <b>Love it</b>, <b>Good</b>, <b>Okay</b>, <b>Weak</b> or <b>No</b>, and say what to change in a
        few words ("the reese too dark", "more punch in the kick", "the bell too loud").`
     : INTRO_TEXT;
