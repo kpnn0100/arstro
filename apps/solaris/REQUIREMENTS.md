@@ -103,6 +103,18 @@ OSC."*
   held bass (an Alberti bass, an arpeggio) keeps its bass. Fast enough for one track with headroom: the
   registry's real-time budget holds for a piano chord.
 
+- **R-INST-13 An analog synth — the DSP library's** ✅ (DR-INST-13) (user request, 2026-11-27: *"the synth you use is
+  scrap and the sound design quality is nowhere near acceptable, create me a synth that replicate an analog synth …
+  any new instrument you make need to have good UI UX, physical base (math base) and follow music industrial
+  standard … learn from serum, massive"*). The DSP library's `analog` (REQ-analog-1…6): two oscillators free of
+  audible aliasing (saw, pulse, triangle, sine) with the JP-8000's unison — to seven free-running voices, Szabo's
+  detune curve and mix law — a sub and noise; a four-pole zero-delay-feedback ladder that drives and sings; envelopes
+  that charge like a capacitor; a pitch envelope; an LFO in Hz or on the song's beat; the wheels, mono / legato glide,
+  drift. Solaris has it with no engine or service code of its own (R-DSP-2): `clip add --instrument analog`, its 59
+  parameters addresses, its 15 samples of latency compensated (R-MIX-17), the song's beat handed to its LFO (R-FX-18).
+  **Its window** is the generated face (R-UI-12), which must draw what this synth is: the unison's voices fanned in the
+  oscillator's screen, the pulse at its width, the LADDER's response (four poles, its resonance) by its mode, a
+  filter switched off as a flat line. The Basic Synth stays, for songs that use it.
 - **R-INST-12 A guitar — a plucked string, the DSP library's** ✅ (DR-INST-12) (user request, 2026-10-21: *"make me another future
   bass banger, that sound good, apply style from san holo, illenium …"* — that style is built on a clean electric
   guitar, and Solaris has none). The DSP library's guitar (REQ-guitar-1/2): a string PLUCKED — released from rest at a

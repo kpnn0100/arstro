@@ -768,6 +768,19 @@ namespace
                  r.app->project().windows().openDevice(dv);
                  r.settle();
              }},
+            {"analog-window", // R-INST-13: the analog synth's face — oscillators with unison, the ladder, envelopes, the LFO
+             [](sltest::Rig &r) {
+                 r.cmd("project new " + r.song("Supersaw") + ".slp --bpm 150");
+                 r.cmd("strip add --kind instrument --instrument analog --name Supersaw");
+                 r.settle();
+                 std::string dv;
+                 for (const auto &st : r.svc->model().strips)
+                     for (const auto &d : st.devices)
+                         if (d.type == "analog" && dv.empty()) dv = d.id;
+                 r.cmd("set " + dv + ".osc1.unison=7 " + dv + ".osc1.detune=0.45 " + dv + ".filter.cutoff=9000");
+                 r.app->project().windows().openDevice(dv);
+                 r.settle();
+             }},
             {"mixer-vca", // R-MIX-19: a VCA "Synths" at −6 dB moving two synth lines — its card names them, no meter; theirs say "VCA Synths −6.0"
              [](sltest::Rig &r) {
                  r.cmd("project new " + r.song("Groups") + ".slp --bpm 120");

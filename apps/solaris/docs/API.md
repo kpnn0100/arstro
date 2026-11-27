@@ -945,6 +945,71 @@ Four sine operators by phase modulation — eight algorithms, operator 4 fed bac
 | `vibrato.depth` | 0.0 … 2.0 st | 0.5 st |
 | `vibrato.rate` | 0.1 … 20.0 Hz | 5.5 Hz |
 
+### `analog` — Analog Synth (instrument)
+
+A virtual-analog polysynth: two alias-free oscillators with the JP-8000's seven-voice unison, a sub and noise, a four-pole ladder filter that drives and self-oscillates, capacitor-curved envelopes, a pitch envelope, an LFO that can follow the beat; 16 voices at twice the sample rate.
+
+| parameter | range | default |
+|---|---|---|
+| `osc1.wave` | saw · pulse · triangle · sine | saw |
+| `osc1.octave` | -3.0 … 3.0 oct | 0.0 oct |
+| `osc1.semi` | -12.0 … 12.0 st | 0.0 st |
+| `osc1.fine` | -100.0 … 100.0 ct | 0.0 ct |
+| `osc1.level` | 0.0 … 1.0 | 0.8 |
+| `osc1.width` | 0.05 … 0.95 | 0.5 |
+| `osc1.unison` | 1.0 … 7.0 | 1.0 |
+| `osc1.detune` | 0.0 … 1.0 | 0.3 |
+| `osc1.blend` | 0.0 … 1.0 | 0.5 |
+| `osc1.spread` | 0.0 … 1.0 | 0.7 |
+| `osc2.wave` | saw · pulse · triangle · sine | saw |
+| `osc2.octave` | -3.0 … 3.0 oct | 0.0 oct |
+| `osc2.semi` | -12.0 … 12.0 st | 0.0 st |
+| `osc2.fine` | -100.0 … 100.0 ct | 0.0 ct |
+| `osc2.level` | 0.0 … 1.0 | 0.0 |
+| `osc2.width` | 0.05 … 0.95 | 0.5 |
+| `osc2.unison` | 1.0 … 7.0 | 1.0 |
+| `osc2.detune` | 0.0 … 1.0 | 0.3 |
+| `osc2.blend` | 0.0 … 1.0 | 0.5 |
+| `osc2.spread` | 0.0 … 1.0 | 0.7 |
+| `sub.level` | 0.0 … 1.0 | 0.0 |
+| `sub.octave` | -1 · -2 | -1 |
+| `sub.wave` | sine · square | sine |
+| `sub.noise` | 0.0 … 1.0 | 0.0 |
+| `filter.mode` | lowpass 24 · lowpass 12 · bandpass 12 · highpass 12 · off | lowpass 24 |
+| `filter.cutoff` | 20.0 … 20000.0 Hz | 20000.0 Hz |
+| `filter.res` | 0.0 … 1.0 | 0.0 |
+| `filter.drive` | 0.0 … 24.0 dB | 0.0 dB |
+| `filter.env` | -8.0 … 8.0 oct | 0.0 oct |
+| `filter.keytrack` | 0.0 … 1.0 | 0.0 |
+| `filter.velocity` | 0.0 … 4.0 oct | 0.0 oct |
+| `fenv.attack` | 0.0 … 10000.0 ms | 3.0 ms |
+| `fenv.decay` | 0.0 … 10000.0 ms | 400.0 ms |
+| `fenv.sustain` | 0.0 … 1.0 | 0.5 |
+| `fenv.release` | 0.0 … 10000.0 ms | 300.0 ms |
+| `amp.attack` | 0.0 … 10000.0 ms | 3.0 ms |
+| `amp.decay` | 0.0 … 10000.0 ms | 300.0 ms |
+| `amp.sustain` | 0.0 … 1.0 | 0.8 |
+| `amp.release` | 0.0 … 10000.0 ms | 250.0 ms |
+| `penv.amount` | -24.0 … 24.0 st | 0.0 st |
+| `penv.decay` | 1.0 … 5000.0 ms | 80.0 ms |
+| `lfo.shape` | sine · triangle · saw · square · random | sine |
+| `lfo.rate` | 0.01 … 30.0 Hz | 5.0 Hz |
+| `lfo.sync` | free · 4 bars · 2 bars · 1/1 · 1/2 · 1/4 · 1/8 · 1/16 · 1/32 · 1/2D · 1/4D · 1/8D · 1/16D · 1/2T · 1/4T · 1/8T · 1/16T | free |
+| `lfo.fade` | 0.0 … 5000.0 ms | 0.0 ms |
+| `lfo.pitch` | -24.0 … 24.0 st | 0.0 st |
+| `lfo.cutoff` | -4.0 … 4.0 oct | 0.0 oct |
+| `lfo.amp` | 0.0 … 1.0 | 0.0 |
+| `lfo.width` | 0.0 … 0.45 | 0.0 |
+| `voice.mode` | poly · mono · legato | poly |
+| `voice.glide` | 0.0 … 2000.0 ms | 0.0 ms |
+| `voice.bend` | 0.0 … 24.0 st | 2.0 st |
+| `voice.drift` | 0.0 … 1.0 | 0.15 |
+| `voice.phase` | free · reset | free |
+| `vibrato.depth` | 0.0 … 2.0 st | 0.5 st |
+| `vibrato.rate` | 0.1 … 20.0 Hz | 5.5 Hz |
+| `volume` | -60.0 … 6.0 dB | -12.0 dB |
+| `velocity` | 0.0 … 1.0 | 0.6 |
+
 ### `piano` — Piano (instrument)
 
 A physical piano: felt hammers on stiff, inharmonic strings through a shared bridge and soundboard; sustain and soft pedals; 16 voices, a held key never stolen while a released one rings.

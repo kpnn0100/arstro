@@ -5927,6 +5927,620 @@
       ]
     },
     {
+      "type": "analog",
+      "label": "Analog Synth",
+      "kind": "instrument",
+      "summary": "A virtual-analog polysynth: two alias-free oscillators with the JP-8000's seven-voice unison, a sub and noise, a four-pole ladder filter that drives and self-oscillates, capacitor-curved envelopes, a pitch envelope, an LFO that can follow the beat; 16 voices at twice the sample rate.",
+      "params": [
+        {
+          "name": "osc1.wave",
+          "label": "Wave",
+          "unit": "",
+          "choices": [
+            "saw",
+            "pulse",
+            "triangle",
+            "sine"
+          ],
+          "default": "saw"
+        },
+        {
+          "name": "osc1.octave",
+          "label": "Octave",
+          "unit": "oct",
+          "min": -3.0,
+          "max": 3.0,
+          "default": 0.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "osc1.semi",
+          "label": "Semitone",
+          "unit": "st",
+          "min": -12.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "osc1.fine",
+          "label": "Fine",
+          "unit": "ct",
+          "min": -100.0,
+          "max": 100.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc1.level",
+          "label": "Level",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.8,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc1.width",
+          "label": "Pulse Width",
+          "unit": "",
+          "min": 0.05,
+          "max": 0.95,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc1.unison",
+          "label": "Unison",
+          "unit": "",
+          "min": 1.0,
+          "max": 7.0,
+          "default": 1.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "osc1.detune",
+          "label": "Detune",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.3,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc1.blend",
+          "label": "Blend",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc1.spread",
+          "label": "Spread",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.7,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc2.wave",
+          "label": "Wave",
+          "unit": "",
+          "choices": [
+            "saw",
+            "pulse",
+            "triangle",
+            "sine"
+          ],
+          "default": "saw"
+        },
+        {
+          "name": "osc2.octave",
+          "label": "Octave",
+          "unit": "oct",
+          "min": -3.0,
+          "max": 3.0,
+          "default": 0.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "osc2.semi",
+          "label": "Semitone",
+          "unit": "st",
+          "min": -12.0,
+          "max": 12.0,
+          "default": 0.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "osc2.fine",
+          "label": "Fine",
+          "unit": "ct",
+          "min": -100.0,
+          "max": 100.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc2.level",
+          "label": "Level",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc2.width",
+          "label": "Pulse Width",
+          "unit": "",
+          "min": 0.05,
+          "max": 0.95,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc2.unison",
+          "label": "Unison",
+          "unit": "",
+          "min": 1.0,
+          "max": 7.0,
+          "default": 1.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "osc2.detune",
+          "label": "Detune",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.3,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc2.blend",
+          "label": "Blend",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "osc2.spread",
+          "label": "Spread",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.7,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "sub.level",
+          "label": "Sub",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "sub.octave",
+          "label": "Sub Octave",
+          "unit": "",
+          "choices": [
+            "-1",
+            "-2"
+          ],
+          "default": "-1"
+        },
+        {
+          "name": "sub.wave",
+          "label": "Sub Wave",
+          "unit": "",
+          "choices": [
+            "sine",
+            "square"
+          ],
+          "default": "sine"
+        },
+        {
+          "name": "sub.noise",
+          "label": "Noise",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "filter.mode",
+          "label": "Mode",
+          "unit": "",
+          "choices": [
+            "lowpass 24",
+            "lowpass 12",
+            "bandpass 12",
+            "highpass 12",
+            "off"
+          ],
+          "default": "lowpass 24"
+        },
+        {
+          "name": "filter.cutoff",
+          "label": "Cutoff",
+          "unit": "Hz",
+          "min": 20.0,
+          "max": 20000.0,
+          "default": 20000.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "filter.res",
+          "label": "Resonance",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "filter.drive",
+          "label": "Drive",
+          "unit": "dB",
+          "min": 0.0,
+          "max": 24.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "filter.env",
+          "label": "Envelope",
+          "unit": "oct",
+          "min": -8.0,
+          "max": 8.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "filter.keytrack",
+          "label": "Key Track",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "filter.velocity",
+          "label": "Velocity",
+          "unit": "oct",
+          "min": 0.0,
+          "max": 4.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "fenv.attack",
+          "label": "Attack",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 3.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "fenv.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 400.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "fenv.sustain",
+          "label": "Sustain",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "fenv.release",
+          "label": "Release",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 300.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "amp.attack",
+          "label": "Attack",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 3.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "amp.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 300.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "amp.sustain",
+          "label": "Sustain",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.8,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "amp.release",
+          "label": "Release",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 10000.0,
+          "default": 250.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "penv.amount",
+          "label": "Amount",
+          "unit": "st",
+          "min": -24.0,
+          "max": 24.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "penv.decay",
+          "label": "Decay",
+          "unit": "ms",
+          "min": 1.0,
+          "max": 5000.0,
+          "default": 80.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "lfo.shape",
+          "label": "Shape",
+          "unit": "",
+          "choices": [
+            "sine",
+            "triangle",
+            "saw",
+            "square",
+            "random"
+          ],
+          "default": "sine"
+        },
+        {
+          "name": "lfo.rate",
+          "label": "Rate",
+          "unit": "Hz",
+          "min": 0.01,
+          "max": 30.0,
+          "default": 5.0,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "lfo.sync",
+          "label": "Sync",
+          "unit": "",
+          "choices": [
+            "free",
+            "4 bars",
+            "2 bars",
+            "1/1",
+            "1/2",
+            "1/4",
+            "1/8",
+            "1/16",
+            "1/32",
+            "1/2D",
+            "1/4D",
+            "1/8D",
+            "1/16D",
+            "1/2T",
+            "1/4T",
+            "1/8T",
+            "1/16T"
+          ],
+          "default": "free"
+        },
+        {
+          "name": "lfo.fade",
+          "label": "Fade In",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 5000.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "lfo.pitch",
+          "label": "To Pitch",
+          "unit": "st",
+          "min": -24.0,
+          "max": 24.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "lfo.cutoff",
+          "label": "To Cutoff",
+          "unit": "oct",
+          "min": -4.0,
+          "max": 4.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "lfo.amp",
+          "label": "To Level",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "lfo.width",
+          "label": "To Pulse Width",
+          "unit": "",
+          "min": 0.0,
+          "max": 0.45,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "voice.mode",
+          "label": "Mode",
+          "unit": "",
+          "choices": [
+            "poly",
+            "mono",
+            "legato"
+          ],
+          "default": "poly"
+        },
+        {
+          "name": "voice.glide",
+          "label": "Glide",
+          "unit": "ms",
+          "min": 0.0,
+          "max": 2000.0,
+          "default": 0.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "voice.bend",
+          "label": "Bend Range",
+          "unit": "st",
+          "min": 0.0,
+          "max": 24.0,
+          "default": 2.0,
+          "integer": true,
+          "log": false
+        },
+        {
+          "name": "voice.drift",
+          "label": "Drift",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.15,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "voice.phase",
+          "label": "Phase",
+          "unit": "",
+          "choices": [
+            "free",
+            "reset"
+          ],
+          "default": "free"
+        },
+        {
+          "name": "vibrato.depth",
+          "label": "Vibrato",
+          "unit": "st",
+          "min": 0.0,
+          "max": 2.0,
+          "default": 0.5,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "vibrato.rate",
+          "label": "Vibrato Rate",
+          "unit": "Hz",
+          "min": 0.1,
+          "max": 20.0,
+          "default": 5.5,
+          "integer": false,
+          "log": true
+        },
+        {
+          "name": "volume",
+          "label": "Volume",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 6.0,
+          "default": -12.0,
+          "integer": false,
+          "log": false
+        },
+        {
+          "name": "velocity",
+          "label": "Velocity",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.6,
+          "integer": false,
+          "log": false
+        }
+      ]
+    },
+    {
       "type": "piano",
       "label": "Piano",
       "kind": "instrument",

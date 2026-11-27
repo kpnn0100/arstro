@@ -3317,6 +3317,23 @@ eight strings, a bend at once. **Here** it is the registry's "guitar" and nothin
 (`core/tests/serviceTests.cpp:5435`: an A2 at 110 Hz, ten times its neighbours; `set dv_1.mute=0.6` over 20 dB shorter;
 the pattern's bend lane two semitones up). Mutant, seen red: the guitar device not forwarding the wheel.
 
+### DR-INST-13 The analog synth (R-INST-13)
+**The sound** is the DSP library's (REQ-analog-1…6, its commits 388e059 and the one after): `AnalogSynth` — four-point
+band-limited steps at twice the rate through a 63-tap half-band (a 2.96 kHz saw's strongest alias 85.9 dB under its
+fundamental), Szabo's JP-8000 unison, a trapezoidal four-pole ladder with its feedback solved inside the sample,
+exponential envelopes, an LFO that can follow the beat; `instrument/README.md` (A1)–(A22). **Here** it is the registry's
+"analog": dropped as one line (`clip add --instrument analog`), its parameters addresses (`<dv>.osc1.unison`,
+`.osc1.detune`, `.filter.mode`, `.filter.cutoff`, `.filter.res`, `.lfo.sync`, …). Its `latency()` (15 samples) is an
+instrument's source latency in `Engine::alignLatency` (R-MIX-17), so a note sounds ON its sample; the engine's
+`setTransport` before each piece (R-FX-18) is what locks its LFO to the beat. **The face** (`app/widgets/AnalogFace.cpp`,
+drawing only): `waveAt` draws a `pulse` at the oscillator's `width`; the wave screen fans `unison` voices by the `detune`
+knob; `responseDb` draws the ladder — H = N(s)/((1 + s)⁴ + 4.4·res) for `lowpass 24`, `lowpass 12`, `bandpass 12`,
+`highpass 12`, 0 dB for `off` — and `drawGlyph` a key for each. Tests: L2
+`test_the_analog_synth_plays_with_no_code_of_its_own` (`core/tests/serviceTests.cpp`: a sine from beat 1 equal to
+sin(2π·440·(n − 24000)/48000) to 1e-5 and silent before it; a beat-long square LFO on the level gating the beat's second
+half; the ladder at 1 kHz and resonance 1 singing at 1000.0 Hz; an unknown parameter refused by name); shot
+`analog-window` (both sizes). Mutant, seen red: the device reporting no latency (the sine 0.84 from where it belongs).
+
 ### DR-FX-18 A shaper follows the song's beat (R-FX-18; REQ-fx-shaper-1, REQ-device-12)
 The DSP library's `shaper` (DSP `0176d08`): a volume turned down and up in a shape — sine, triangle, saw down, saw up,
 square, pump — a note value long, `depth`, `phase`, `stereo`, `smooth`; a strip's effect like any other, its parameters

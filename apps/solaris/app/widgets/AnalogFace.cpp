@@ -1,3 +1,4 @@
+#include <complex>
 #include "AnalogFace.h"
 #include "DevicePanel.h"
 #include "ParamFormat.h"
@@ -61,11 +62,12 @@ namespace solaris_ui
             t.strokePath();
         }
         /** One cycle of a wave by its choice's name, at phase p ∈ [0,1): −1 … 1. Unknown: a sine. */
-        double waveAt(const std::string &name, double p)
+        double waveAt(const std::string &name, double p, double width = 0.5)
         {
             p -= std::floor(p);
             if (name == "saw") return 2.0 * p - 1.0;
             if (name == "square") return p < 0.5 ? 1.0 : -1.0;
+            if (name == "pulse") return p < width ? 1.0 : -1.0;   // the analog synth's (R-INST-13): a square with a width
             if (name == "triangle") return 1.0 - 4.0 * std::fabs(p - 0.5);
             return std::sin(2.0 * kPi * p);
         }
@@ -76,7 +78,7 @@ namespace solaris_ui
             const double x0 = r.x, x1 = r.right(), y0 = r.y, y1 = r.bottom(), cy = (y0 + y1) * 0.5, h = (y1 - y0) * 0.5;
             t.setStroke(c, 1.3);
             t.beginPath();
-            if (n == "sine" || n == "saw" || n == "square" || n == "triangle")
+            if (n == "sine" || n == "saw" || n == "square" || n == "triangle" || n == "pulse")
             {
                 const int steps = 24;
                 for (int k = 0; k <= steps; ++k)
@@ -86,14 +88,20 @@ namespace solaris_ui
                     if (n == "saw" && k == steps) v = 1.0;
                     const double x = x0 + p * (x1 - x0), y = cy - v * h;
                     if (k == 0) t.moveTo(x, y);
-                    else if (n == "square" && (k == steps / 2)) { t.lineTo(x, cy - h); t.lineTo(x, cy + h); }
+                    else if ((n == "square" || n == "pulse") && (k == steps / 2)) { t.lineTo(x, cy - h); t.lineTo(x, cy + h); }
                     else t.lineTo(x, y);
                 }
                 if (n == "saw") t.lineTo(x1, cy + h);
                 t.strokePath();
                 return true;
             }
-            if (n == "lowpass" || n == "highpass" || n == "bandpass" || n == "notch")
+            if (n == "off") // a filter switched out: a flat line
+            {
+                t.moveTo(x0, cy); t.lineTo(x1, cy);
+                t.strokePath();
+                return true;
+            }
+            if (n.rfind("lowpass", 0) == 0 || n.rfind("highpass", 0) == 0 || n.rfind("bandpass", 0) == 0 || n == "notch")
             {
                 const int steps = 24;
                 for (int k = 0; k <= steps; ++k)
@@ -113,6 +121,19 @@ namespace solaris_ui
 
     double AnalogFace::responseDb(const std::string &mode, double w, double res)
     {
+        // the analog synth's ladder (DSP AnalogSynth (A10)–(A14)): four poles and a feedback k = 4.4·res —
+        // H = N(s)/((1 + s)⁴ + k), N by the mode; "off" is flat
+        if (mode == "off") return 0.0;
+        if (mode == "lowpass 24" || mode == "lowpass 12" || mode == "bandpass 12" || mode == "highpass 12")
+        {
+            const std::complex<double> s1(1.0, w), s2 = s1 * s1, jw(0.0, w);
+            const double kf = 4.4 * std::clamp(res, 0.0, 1.0);
+            std::complex<double> n = (1.0 + 0.5 * kf);                       // (A13): half the passband given back
+            if (mode == "lowpass 12") n *= s2;
+            else if (mode == "bandpass 12") n *= 2.0 * jw * s2;
+            else if (mode == "highpass 12") n *= jw * jw * s2;
+            return 20.0 * std::log10(std::max(std::abs(n / (s2 * s2 + kf)), 1e-6));
+        }
         // StateVariableFilter (S4)/(S5): the analog prototype, s = j·w, D = s² + k·s + 1, k = 1/Q
         const double q = 0.7071 * std::pow(2.0, 5.5 * std::clamp(res, 0.0, 1.0)), k = 1.0 / q;
         const double re = 1.0 - w * w, im = k * w, d = std::sqrt(re * re + im * im);
@@ -632,8 +653,9 @@ namespace solaris_ui
             const int a = std::clamp((int)std::floor(light), 0, (int)w.spec.choices.size() - 1), b = std::min(a + 1, (int)w.spec.choices.size() - 1);
             const double f = light - a, level = std::clamp(value("level", 1.0), 0.0, 1.0);
             const double cycles = std::clamp(2.0 * std::pow(2.0, value("octave", 0.0) * 0.5 + value("semi", 0.0) / 24.0), 1.0, 6.0);
-            const int voices = std::max(1, (int)std::lround(value("voices", 1.0)));
-            const double spread = value("detune", 0.0) / 100.0;
+            const bool knob = find(s.prefix, "unison", si) >= 0;   // the analog synth: voices 1…7, a detune knob 0…1
+            const int voices = std::max(1, (int)std::lround(value(knob ? "unison" : "voices", 1.0)));
+            const double spread = knob ? value("detune", 0.0) * 0.6 : value("detune", 0.0) / 100.0, pw = value("width", 0.5);
             for (int v = voices - 1; v >= 0; --v)
             {
                 // a unison voice drifts by the detune: drawn behind the first, fainter
@@ -642,7 +664,7 @@ namespace solaris_ui
                 for (int k = 0; k <= 160; ++k)
                 {
                     const double p = (double)k / 160.0, ph = p * cycles + off;
-                    const double y = (1.0 - f) * waveAt(w.spec.choices[(size_t)a], ph) + f * waveAt(w.spec.choices[(size_t)b], ph);
+                    const double y = (1.0 - f) * waveAt(w.spec.choices[(size_t)a], ph, pw) + f * waveAt(w.spec.choices[(size_t)b], ph, pw);
                     pts.push_back(Point{in.x + p * in.w, in.y + in.h * 0.5 - y * level * in.h * 0.45});
                 }
                 if (v == 0) curve(pts, false);

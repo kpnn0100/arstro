@@ -799,7 +799,7 @@ static void test_an_instrument_drop_is_one_command_and_a_refusal_says_nothing_ch
 
     const std::string before = r.text();
     r.events.clear();
-    assert(contains(r.no("clip add --instrument flute"), "`flute` is not an instrument (instruments: synth wavetable fm piano drums 808 guitar granular multisample sampler)"));
+    assert(contains(r.no("clip add --instrument flute"), "`flute` is not an instrument (instruments: synth wavetable fm analog piano drums 808 guitar granular multisample sampler)"));
     assert(contains(r.no("clip add --instrument synth --strip ch_2"), "without --src or --strip"));
     assert(contains(r.no("clip add --instrument synth --length -1"), "--length"));   // the strip was made, then the clip refused
     assert(r.text() == before && r.events.size() == 3);                                // three rejections, no change
@@ -5568,6 +5568,59 @@ static void test_the_guitar_plays_with_no_code_of_its_own()
     pass("the guitar (R-INST-12): the DSP library's plucked string, here as its registry says — one line to drop, 110 Hz from an A2, its palm mute an address (over 20 dB shorter), the bend lane bending it two semitones");
 }
 
+// R-INST-13: the DSP library's analog synth is an instrument here as its registry says — one line to drop it; its note
+// ON its sample though the synth is 15 samples late inside (its latency compensated, R-MIX-17); its LFO on the song's
+// beat (the transport reaches an instrument, R-FX-18); its ladder singing at the cutoff an address sets
+static void test_the_analog_synth_plays_with_no_code_of_its_own()
+{
+    Run r;
+    const std::string dir = scratch();
+    r.ok("project new " + freshSong("analog") + " --bpm 120");
+    r.ok("clip add --instrument analog --at 0 --length 8");                // ch_2 dv_1, pt_1
+    const DeviceModel *d = nullptr;
+    for (const auto &st : r.svc.model().strips)
+        for (const auto &dv : st.devices)
+            if (dv.type == "analog") d = &dv;
+    assert(d && d->instrument && d->label == "Analog Synth");
+    r.ok("set dv_1.osc1.wave=sine dv_1.osc1.level=1 dv_1.filter.mode=off dv_1.voice.phase=reset dv_1.voice.drift=0 "
+         "dv_1.amp.attack=0 dv_1.amp.decay=0 dv_1.amp.sustain=1 dv_1.amp.release=1 dv_1.velocity=0 dv_1.volume=0");
+    assert(r.ok("get dv_1.filter.mode") == "off\n");
+    r.ok("notes add pt_1 \"A4@1:2:127\"");                               // 440 Hz from beat 1 = sample 24000
+    auto render = [&](const std::string &name) {
+        const std::string out = dir + "/" + name + ".wav";
+        r.ok("render --out " + out + " --to 8 --bits 32f");
+        return r.fake.written[out][0];
+    };
+    const auto y = render("analog-sine");
+    // the oscillator itself, on the note's own sample: sin(2π·440·(n − 24000)/48000) — not 15 samples after it
+    double worst = 0, before = 0;
+    for (long n = 24100; n < 28800; ++n)
+        worst = std::max(worst, std::abs((double)y[(size_t)n] - std::sin(2 * M_PI * 440.0 * (double)(n - 24000) / 48000.0)));
+    for (long n = 20000; n < 23980; ++n) before = std::max(before, std::abs((double)y[(size_t)n]));
+    std::printf("    a sine from beat 1: %.5f from sin at worst, %.6f before the note\n", worst, before);
+    assert(worst < 0.01 && before < 1e-4);
+    // the LFO on the beat: a square a beat long on the level — the beat's first half sounds, its second is silent
+    r.ok("set dv_1.lfo.shape=square dv_1.lfo.sync=1/4 dv_1.lfo.amp=1");
+    const auto g = render("analog-gated");
+    auto rms = [](const std::vector<float> &x, long a, long n) {
+        double e = 0;
+        for (long i = a; i < a + n; ++i) e += (double)x[(size_t)i] * x[(size_t)i];
+        return std::sqrt(e / (double)n);
+    };
+    assert(rms(g, 25000, 10000) > 0.6 && rms(g, 37000, 10000) < 0.01 && rms(g, 49000, 10000) > 0.6);
+    // the ladder, alone: no oscillator, a breath of noise, full resonance — it sings at the cutoff
+    r.ok("set dv_1.lfo.amp=0 dv_1.osc1.level=0 dv_1.sub.noise=0.001 dv_1.filter.mode=\"lowpass 24\" dv_1.filter.cutoff=1000 dv_1.filter.res=1");
+    r.ok("pattern clear pt_1");
+    r.ok("notes add pt_1 \"A4@0:8:127\"");
+    const auto z = render("analog-sings");
+    int crossings = 0;
+    for (long n = 96001; n < 144000; ++n) crossings += (z[(size_t)n - 1] < 0) != (z[(size_t)n] < 0);
+    std::printf("    the ladder at 1 kHz, resonance 1: it sings at %.1f Hz\n", crossings / 2.0);
+    assert(std::abs(crossings / 2.0 - 1000.0) < 10.0);
+    assert(contains(r.no("set dv_1.osc1.shape=saw"), "osc1.shape"));
+    pass("the analog synth (R-INST-13): the DSP library's, here as its registry says — one line to drop; a note on its own sample (the synth's 15 samples compensated); its LFO on the song's beat; its ladder singing at the cutoff");
+}
+
 static void test_the_wavetable_plays_with_no_code_of_its_own()
 {
     // R-INST-7: the DSP library's "wavetable" is an instrument here as the registry describes it — dropped as one line,
@@ -8071,6 +8124,7 @@ int main()
     test_a_shaper_follows_the_songs_beat();
     test_a_vowel_filter_speaks_on_a_strip();
     test_the_guitar_plays_with_no_code_of_its_own();
+    test_the_analog_synth_plays_with_no_code_of_its_own();
     test_every_instrument_drops_as_one_line_and_sounds();
     test_a_multisample_reads_its_sfz();
     test_every_effect_drops_as_one_line_and_passes_sound();

@@ -64,7 +64,7 @@ line; runs beside it.
 - `[ ]` The melody and sound-design skills are written for a developer running the lab servers;
   each needs an "inside Solaris" section before an in-app agent is given them.
 
-**► J4** — the user judges fb-003 (the four future bass tracks with lessons 1–6 applied) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► K2** — the sound design skill remade on the analog synth, and a future bass song (good, energetic) for the user to judge. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -1029,7 +1029,26 @@ between / learn from professional from trap nation first"*. Tooling, not product
       driven 18 dB; the drops' melodies with rests and a vocal-chop counter-melody). Measured, with measures that track
       the words: the supersaw's centre 1.9–2.1 → 2.7–2.9 kHz; the kick's hit 3–6 → 7–10 dB over the mix (a peak-vs-tail
       measure had not tracked the verdict — replaced). fb-003: the same four tracks, the lessons applied.
-- [ ] **J4** The user's verdicts on fb-003 → taste.md.
+- [x] **J4** The user's verdicts on fb-003 → taste.md.
+      — 2 of 8 judged: verse 2 good, verse 1 okay, both "bell is not good"; the drops never judged. Lessons 7 (the vocal
+      chop is liked) and 8 (the bell).
+- [x] **J5** (2026-11-27) "give me 5 future bass song … clean sound and energy drop … also fix the skill" — five songs
+      written and a first one rendered on the Basic Synth (a levelling pass, lower registers, a harmonic bell). The
+      user heard it and stopped the batch: *"the synth you use is scrap and the sound design quality is nowhere near
+      acceptable"* → section K. Not committed; superseded.
+
+### K — an analog synth, and the sound skill remade on it (user request, 2026-11-27)
+*"remove the skill, remake the skill for me / i'm starting to think the problem is the synth, the synth limited you so
+you can not make good music / … create me a synth that replicate an analog synth, learn future bass online and make me
+a song that is good, energetic. feel free to make new instrument if needed / any new instrument you make need to have
+good UI UX, physical base (math base) and follow music industrial standard / learn from serum, massive"*.
+- [x] **K1** The analog synth (R-INST-13, DR-INST-13; DSP REQ-analog-1…6, commits 388e059, 06ec9da): alias-free
+      oscillators at 2× (a saw's strongest alias 85.9 dB under its fundamental), the JP-8000's seven-voice unison by
+      Szabo's measurements, a four-pole zero-delay-feedback ladder with drive, capacitor envelopes, a pitch envelope,
+      an LFO on the beat; registry `analog`, 59 parameters. Here with no engine or service code: its latency
+      compensated, its LFO on the song's beat (L2 test; mutant seen red). Its face draws the unison, the pulse and
+      the ladder's response (shot `analog-window`).
+- [ ] **K2** The sound design skill removed and remade on the analog synth; a future bass song, good and energetic.
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
