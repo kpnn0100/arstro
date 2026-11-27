@@ -270,6 +270,78 @@ PLAIN = dict(name="Plain", source="", layers=[("analog", "lead", 0, None, "slide
                     "next note in 80 ms), a late vibrato")
 
 
+# The PLUCK that answers the lead: struck, gone in a quarter of a second, many voices (so its notes ring over each other)
+_PLUCK = dict(osc1__wave="saw", osc1__unison=3, osc1__detune=0.16, osc1__blend=0.5, osc1__spread=0.8, osc1__level=0.8,
+              osc2__wave="pulse", osc2__width=0.4, osc2__octave=1, osc2__level=0.25, filter__mode='"lowpass 24"',
+              filter__cutoff=500, filter__res=0.2, filter__env=4.6, filter__keytrack=0.7, fenv__attack=0, fenv__decay=170,
+              fenv__sustain=0, fenv__release=150, amp__attack=1, amp__decay=320, amp__sustain=0, amp__release=260,
+              voice__mode="poly", voice__glide=0, velocity=0.3, volume=0)
+PLUCKS = {
+    "glass": ("three saws and a pulse an octave up, the ladder shut at 500 Hz and flicked open 4.6 octaves for 170 ms at "
+              "every note, gone in 0.3 s", _PLUCK),
+    "hollow": ("two pulses (a square and a narrow one a fifth of an octave apart in width), rounder and woodier, the "
+               "ladder flicked open for 130 ms with some ring",
+               dict(_PLUCK, osc1__wave="pulse", osc1__width=0.5, osc1__unison=3, osc1__detune=0.12, osc2__wave="pulse",
+                    osc2__width=0.25, osc2__octave=0, osc2__level=0.5, filter__cutoff=700, filter__res=0.38,
+                    filter__env=3.8, fenv__decay=130, amp__decay=260)),
+}
+# CALL AND RESPONSE: the loved lead (LEADS[0], the Glass stack) and a pluck share the melody. Written as two lines over
+# the same four units; "r" rests; each unit is 8 beats (two bars: kick 1, 4, 6 — snare 3, 7).
+CALLS = [
+    dict(mood="Longing", name="Question and answer", sound="glass",
+         how="the lead asks in the first bar and holds its last note; the pluck answers in the second bar, a quick "
+             "falling figure that turns back up",
+         lead=dict(units=["B4:1 E5:1 G5:1 F#5:2 r:3", "G5:1 E5:1 B5:1 G5:2 r:3", "E5:1 A5:1 C6:1 B5:2 r:3",
+                          "E6:1 B5:1 A5:1 F#5:2 r:3"], last="E6:1 B5:1 A5:1 B5:2 r:3", home="E6"),
+         pluck=dict(units=["r:4.5 B5:.5 G5:.5 F#5:.5 E5:.5 F#5:.5 B5:1", "r:4.5 C6:.5 B5:.5 G5:.5 E5:.5 G5:.5 B5:1",
+                           "r:4.5 E6:.5 C6:.5 B5:.5 A5:.5 B5:.5 E6:1", "r:4.5 B5:.5 A5:.5 F#5:.5 D#5:.5 F#5:.5 A5:1"],
+                    last="r:4.5 B5:.5 D#6:.5 F#6:.5 D#6:.5 B5:.5 D#6:1", home="E6")),
+    dict(mood="Longing", name="Echo", sound="glass",
+         how="the lead sings a three-note rise, twice a unit; each time the pluck throws the same three notes back an "
+             "octave higher and twice as fast, in the gap",
+         lead=dict(units=["B4:1.5 E5:.5 G5:1 r:1 E5:1 F#5:.5 G5:.5 r:2", "B4:1.5 E5:.5 G5:1 r:1 F#5:1 G5:.5 B5:.5 r:2",
+                          "C5:1.5 E5:.5 A5:1 r:1 G5:1 A5:.5 B5:.5 r:2", "B4:1.5 E5:.5 F#5:1 r:1 F#5:1 D#5:.5 A5:.5 r:2"],
+                   last="B4:1.5 E5:.5 F#5:1 r:1 F#5:1 B5:.5 D#6:.5 r:2", home="E6"),
+         pluck=dict(units=["r:3 B5:.25 E6:.25 G6:.5 r:2 E6:.25 F#6:.25 G6:.5 r:1",
+                           "r:3 B5:.25 E6:.25 G6:.5 r:2 F#6:.25 G6:.25 B6:.5 r:1",
+                           "r:3 C6:.25 E6:.25 A6:.5 r:2 G6:.25 A6:.25 B6:.5 r:1",
+                           "r:3 B5:.25 E6:.25 F#6:.5 r:2 F#6:.25 D#6:.25 A6:.5 r:1"],
+                    last="r:3 B5:.25 E6:.25 F#6:.5 r:2 B5:.25 D#6:.25 F#6:.5 r:1", home="E6")),
+    dict(mood="Falling", name="The pluck calls", sound="hollow",
+         how="the other way round: the pluck runs up and down the chord in the first bar, and the lead answers with one "
+             "long note that slides down — higher every time, to G6",
+         lead=dict(units=["r:4 B5:2.5 A5:.5 G5:1", "r:4 E6:2.5 B5:.5 G5:1", "r:4 G6:2.5 E6:.5 B5:1", "r:4 F#6:1 D#6:2 B5:1"],
+                   last="r:4 F#6:1 D#6:1.5 F#6:.5 B5:1", home="E6"),
+         pluck=dict(units=["E5:.5 G5:.5 B5:.5 F#6:.5 E6:.5 B5:.5 G5:1 r:4", "E5:.5 G5:.5 B5:.5 G6:.5 F#6:.5 B5:.5 G5:1 r:4",
+                           "E5:.5 G5:.5 C6:.5 G6:.5 E6:.5 C6:.5 B5:1 r:4", "F#5:.5 B5:.5 E6:.5 F#6:.5 E6:.5 B5:.5 A5:1 r:4"],
+                    last="F#5:.5 B5:.5 E6:.5 F#6:.5 E6:.5 B5:.5 A5:1 r:4", home="B5")),
+    dict(mood="Dreamy", name="Trading", sound="hollow",
+         how="short turns: the lead two beats, the pluck two beats, four times a unit — the pluck climbing the chord "
+             "the lead just leaned on; over the borrowed Cm6 both reach for E♭",
+         lead=dict(units=["B5:1 A5:1 r:2 D6:1.5 B5:.5 r:2", "A5:1 F#5:1 r:2 B5:1.5 A5:.5 r:2", "B5:1 G5:1 r:2 E6:1.5 D6:.5 r:2",
+                          "C6:1 G5:1 r:2 Eb6:1.5 D6:.5 r:2"], last="C6:1 G5:1 r:2 Eb6:1.5 D6:.5 r:2", home="G5"),
+         pluck=dict(units=["r:2 F#5:.5 A5:.5 D6:.5 B5:.5 r:2 A5:.5 B5:.5 D6:.5 F#6:.5",
+                           "r:2 D5:.5 F#5:.5 A5:.5 E6:.5 r:2 F#5:.5 A5:.5 B5:.5 D6:.5",
+                           "r:2 E5:.5 G5:.5 B5:.5 D6:.5 r:2 G5:.5 B5:.5 D6:.5 G6:.5",
+                           "r:2 Eb5:.5 G5:.5 A5:.5 C6:.5 r:2 G5:.5 A5:.5 C6:.5 Eb6:.5"],
+                    last="r:2 Eb5:.5 G5:.5 A5:.5 C6:.5 r:2 Eb6:.5 D6:.5 C6:.5 A5:.5", home="D6")),
+    dict(mood="Longing", name="Apart, then together", sound="glass",
+         how="two units of question and answer, then the pluck stops answering and joins: both play the climb to E6 and "
+             "the fall as one sound — the pluck the attack, the lead the body",
+         lead=dict(units=["G5:1.5 F#5:.5 E5:1 B5:2 r:3", "G5:1.5 F#5:.5 E5:1 C6:2 r:3", "E5:1 A5:1 B5:1 C6:2 B5:1 E6:2",
+                          "E6:.5 B5:1.5 r:.5 A5:.5 F#5:2 D#5:1 F#5:2"], last="E6:.5 B5:1.5 r:.5 A5:.5 B5:2 D#6:1 F#6:2", home="E6"),
+         pluck=dict(units=["r:5 B5:.5 D6:.5 F#6:.5 G6:.5 F#6:1", "r:5 C6:.5 E6:.5 F#6:.5 G6:.5 E6:1",
+                           "E5:1 A5:1 B5:1 C6:2 B5:1 E6:2", "E6:.5 B5:1.5 r:.5 A5:.5 F#5:2 D#5:1 F#5:2"],
+                    last="E6:.5 B5:1.5 r:.5 A5:.5 B5:2 D#6:1 F#6:2", home="E6")),
+]
+
+
+def call_lines(c):
+    """A CALLS entry as two melodies (the lead's, the pluck's) in MELODIES' shape, for melody_notes / melody_fit."""
+    return (dict(c["lead"], mood=c["mood"], shape=c["name"], how=c["how"]),
+            dict(c["pluck"], mood=c["mood"], shape=c["name"] + " (pluck)", how=""))
+
+
 def melody_notes(mel):
     """[(beat, length, midi)] over the 16 bars: the four units, then three of them and the last, then home."""
     out, texts = [], mel["units"] + mel["units"][:3] + [mel["last"]]
@@ -314,7 +386,7 @@ def mood_segments(mood):
 
 
 # each element alone, LUFS over the 16 bars — the kick and the bass up front (they are what is judged, with the saw)
-TARGETS = {"Kick": -10.0, "Snare": -16.5, "Saw": -14.5, "Bass": -16.0, "Lead": -14.5}   # the kick at −13: its hit only 4.8 dB over the mix
+TARGETS = {"Kick": -10.0, "Snare": -16.5, "Saw": -14.5, "Bass": -16.0, "Lead": -14.5, "Pluck": -17.0}   # the kick at −13: its hit only 4.8 dB over the mix
 
 
 def segments():
@@ -331,7 +403,7 @@ def segments():
     return out
 
 
-def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None, melody=None, lead=None):
+def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None, melody=None, lead=None, pluck=None):
     S, E, L = Script(), [], 4 * BARS + 8
     line = S.line
     seg = seg or segments()
@@ -413,6 +485,20 @@ def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None, m
         E.append({"name": "Lead", "strip": lbus, "recipe": f"the melody — {melody['shape']}: {melody['how']}. THE SOUND — "
                   f"{lead['name']}: {lead['recipe']}; low cut 180 Hz, an echo, a 2.4 s room; "
                   f"{int(100 * melody_fit(melody))} % of its strong notes are in the chord under them"})
+    if pluck:   # the pluck that answers: struck, short, its own echo bouncing side to side
+        words, patch = PLUCKS[pluck["sound"]]
+        pch, pdv, ppt = S.instrument("analog", "Pluck", L)
+        S.set(pdv, **patch)
+        pn = melody_notes(pluck)
+        S.notes(ppt, [(p, t, max(0.1, d - 0.05), 118 if abs(t - round(t)) < 1e-6 else 100) for t, d, p in pn])
+        S.device(pch, "eq", lowcut__on="on", lowcut__freq=250, highshelf__freq=6000, highshelf__gain=2)
+        S.device(pch, "imager", width=130)
+        S.device(pch, "delay", time=num(0.75 * 60000 / BPM), feedback=0.38, tone=5000, mix=0.24)
+        S.device(pch, "reverb", decay=2000, size=110, mix=0.2, lowcut=500, highcut=11000, width=1)
+        line(f"strip duck {pch} --under {kick} --amount 3")
+        S.set(S.new('dv'), release=90)
+        E.append({"name": "Pluck", "strip": pch, "recipe": f"the answer — {words}; a dotted-eighth echo, a room, wide; "
+                  f"{int(100 * melody_fit(pluck))} % of its strong notes are in the chord under them"})
     for e in E:
         g = (trim or {}).get(e["name"], 0)
         if g:
@@ -433,6 +519,7 @@ def main():
     ap.add_argument("--moods", action="store_true", help="five MOODS (chord sets) on one sound, the user's sparser pattern")
     ap.add_argument("--melody", action="store_true", help="the MELODIES: a lead over the moods the user loved")
     ap.add_argument("--leads", action="store_true", help="the LEADS: five lead SOUNDS on one melody and mood")
+    ap.add_argument("--calls", action="store_true", help="CALLS: call and response between the loved lead and a pluck")
     ap.add_argument("--design", default="808", help="with --moods / --melody: which of OPTIONS plays them")
     a = ap.parse_args()
     out = os.path.abspath(os.path.expanduser(a.out))
@@ -452,11 +539,12 @@ def main():
     seconds = round((4 * BARS + 8) * 60 / BPM)
     design = next(o for o in OPTIONS if o["name"].lower() == a.design.lower())
     by = {m["name"]: m for m in MOODS}
-    runs = ([(by[MELODIES[0]["mood"]], design, MELODIES[0], ld) for ld in LEADS] if a.leads else
-            [(by[x["mood"]], design, x, None) for x in MELODIES] if a.melody else
-            [(m, design, None, None) for m in MOODS] if a.moods else [(None, o, None, None) for o in OPTIONS])
-    for k, (mood, opt, mel, ld) in enumerate(runs, 1):
-        sid = f"lead-{k}" if ld else f"melody-{k}" if mel else (f"mood-{k}" if mood else f"drop-{k}")
+    runs = ([(by[c["mood"]], design, call_lines(c)[0], LEADS[0], dict(call_lines(c)[1], sound=c["sound"])) for c in CALLS]
+            if a.calls else [(by[MELODIES[0]["mood"]], design, MELODIES[0], ld, None) for ld in LEADS] if a.leads else
+            [(by[x["mood"]], design, x, None, None) for x in MELODIES] if a.melody else
+            [(m, design, None, None, None) for m in MOODS] if a.moods else [(None, o, None, None, None) for o in OPTIONS])
+    for k, (mood, opt, mel, ld, pl) in enumerate(runs, 1):
+        sid = f"call-{k}" if pl else f"lead-{k}" if ld else f"melody-{k}" if mel else (f"mood-{k}" if mood else f"drop-{k}")
         if only and str(k) not in only:
             if sid in old:
                 items.append(old[sid])
@@ -465,7 +553,7 @@ def main():
         for attempt in ((1, 2) if not a.quick else (2,)):
             if mood:
                 seg, snares = mood_segments(mood)
-                text, E = arrange(opt, kick, trim, seg, snares, "the kick on 1, 4 and 6 of every two bars (the snare on 3 and 7)", mel, ld)
+                text, E = arrange(opt, kick, trim, seg, snares, "the kick on 1, 4 and 6 of every two bars (the snare on 3 and 7)", mel, ld, pl)
             else:
                 text, E = arrange(opt, kick, trim)
             text = text.replace("project new drop.slp", f"project new {sid}.slp")
@@ -482,9 +570,9 @@ def main():
                 break
             lufs = {e["name"]: loudness(os.path.join(out, f"{sid}.{e['strip']}.mp3")) for e in E}
             if attempt == 1:
-                trim = {n: max(-18, min(18, round(TARGETS[n] - v, 1))) for n, v in lufs.items() if v is not None and v > -60}
+                trim = {n: max(-18, min(12, round(TARGETS[n] - v, 1))) for n, v in lufs.items() if v is not None and v > -60}
         failed += not ok
-        title = (f"Lead {k} — {ld['name']}: {ld['source']}" if ld else f"Melody {k} — {mel['shape']}, over {mood['name']} ({mood['chords']})" if mel else
+        title = (f"Call {k} — {mel['shape']}, over {mood['name']}: {mel['how']}" if pl else f"Lead {k} — {ld['name']}: {ld['source']}" if ld else f"Melody {k} — {mel['shape']}, over {mood['name']} ({mood['chords']})" if mel else
                  f"Mood {k} — {mood['name']}: {mood['chords']}" if mood else f"Drop {k} — {opt['name']}: {opt['about']}")
         item = {"id": sid, "title": title, "sound": True, "section": "drop",
                 "style": "future-bass", "style_label": "Future bass drop — kick, snare, saw, bass", "bpm": BPM,

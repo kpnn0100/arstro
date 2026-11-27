@@ -57,9 +57,24 @@ changes a patch (`scripts/futurebass.py` and `references/analog-patches.md`, tog
    bass need some unique lead, learn online"*. A plain saw with a glide is not a lead in this genre: it needs layers
    (pulse, octave, noise), a filter that moves at each note, a wobble or a voice, or a second instrument on the attack.
    *(drops.py `LEADS`, `--leads`; references/research.md ## The lead)*
+17. **The Glass stack is the lead; the melody is shared with a pluck.** drops-005: Lead 1 **love** — *"love the 1, now
+   make it more advance, a call and response using pluck and lead"*. The lead is the stacked saw-and-pulse one with a
+   filter that opens at each note (`LEADS[0]`); a second, struck voice answers it. *(drops.py `CALLS`, `--calls`)*
 9. *My own reading, awaiting a verdict:* the earlier batches sat an octave too high; the registers are lower now.
 
 ## Batches
+
+### drops-006 (2026-11-27) — call and response: the Glass stack and a pluck
+
+The loved lead and an analog pluck (the ladder flicked open for 130–170 ms, gone in 0.3 s, a dotted-eighth echo) share
+the line; lead −14.5, pluck −17 LUFS alone:
+1. **Question and answer** (Longing) — the lead asks in bar one and holds; the pluck answers in bar two.
+2. **Echo** (Longing) — the lead's three-note rise thrown back an octave up, twice as fast, in the gap.
+3. **The pluck calls** (Falling, a rounder pulse pluck) — the pluck runs the chord, the lead answers with one long slide.
+4. **Trading** (Dreamy, the pulse pluck) — two beats each, four turns a unit; both reach E♭ over the Cm6.
+5. **Apart, then together** (Longing) — two units of answer, then both play the climb to E6 as one sound.
+Measured: 88–100 % of each voice's strong notes in the chord; the voices overlap only at hand-overs (and in 5's unison).
+*Awaiting verdicts.*
 
 ### drops-005 (2026-11-27) — one melody, five lead SOUNDS
 
@@ -72,7 +87,7 @@ Longing with "the cry", the 808 design, the sparse pattern — only the lead's s
 4. **Bite** — two saws 16 cents apart, the ladder at 950 Hz snapped by a 200 ms envelope, clipped hard after it, a
    phaser, a quarter-note echo. (crest 12.7 dB — the densest)
 5. **Bell & air** — an FM bell an octave up striking each note over soft sliding saws and a sine below.
-*Awaiting verdicts.*
+counts: love 1 (chat, recorded) · the other four unmarked. loved: 1 Glass stack. lesson: 17.
 
 ### drops-004 (2026-11-27) — a lead with portamento, five melodies built on feeling
 
