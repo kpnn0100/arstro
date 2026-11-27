@@ -140,6 +140,65 @@ MOODS = [
 ]
 
 
+# ── drops-003: a MELODY over the moods the user loved ──────────────────────────────────────────────────────────────
+# A lead on its own strip, as straight as the saw (no glide, no pitch move). Each melody is four two-bar units and a
+# last unit that replaces the fourth the second time round, landing home. Written in order, 'B5:2 r:.5 G5:.5 …', a
+# unit 8 beats. Two shapes: ANSWERING — a held note with the first chord, then a figure that moves through the hits
+# and runs on alone in the air after the second snare; SOARING — three long notes on the three hits and one more
+# ringing alone in the air.
+MELODIES = [
+    dict(mood="Longing", shape="answering", units=[
+        "B5:2 r:.5 A5:.5 B5:1.5 A5:.5 G5:1 F#5:.5 G5:.5 A5:1", "G5:2 r:.5 F#5:.5 G5:1.5 F#5:.5 E5:1 D5:.5 E5:.5 F#5:1",
+        "E5:2 r:.5 D5:.5 E5:1.5 D5:.5 C5:1 B4:.5 C5:.5 E5:1", "F#5:2 r:.5 F#5:.5 A5:1.5 B5:.5 B5:1 A5:.5 B5:.5 D#6:1"],
+        last="F#5:2 r:.5 F#5:.5 A5:1.5 B5:.5 D#6:1 D#6:.5 E6:.5 F#6:1", home="E6"),
+    dict(mood="Longing", shape="soaring", units=[
+        "G5:3 F#5:2 G5:1 A5:2", "G5:3 F#5:2 E5:1 F#5:2", "E5:3 G5:2 A5:1 B5:2", "B5:3 A5:2 B5:1 A5:2"],
+        last="B5:3 A5:2 B5:1 D#6:2", home="E6"),
+    dict(mood="Falling", shape="answering", units=[
+        "B5:2 r:.5 B5:.5 A5:1.5 G5:.5 F#5:1 G5:.5 A5:.5 B5:1", "D6:2 r:.5 B5:.5 A5:1.5 G5:.5 E5:1 F#5:.5 G5:.5 A5:1",
+        "G5:2 r:.5 G5:.5 B5:1.5 A5:.5 G5:1 F#5:.5 E5:.5 G5:1", "F#5:2 r:.5 F#5:.5 A5:1.5 B5:.5 B5:1 A5:.5 B5:.5 D#6:1"],
+        last="F#5:2 r:.5 F#5:.5 A5:1.5 B5:.5 D#6:1 D#6:.5 E6:.5 F#6:1", home="E6"),
+    dict(mood="Falling", shape="soaring", units=[
+        "B5:3 G5:2 F#5:1 G5:2", "B5:3 A5:2 G5:1 E5:2", "E5:3 G5:2 A5:1 B5:2", "B5:3 A5:2 B5:1 A5:2"],
+        last="B5:3 A5:2 B5:1 D#6:2", home="E6"),
+    dict(mood="Dreamy", shape="answering", units=[
+        "D6:2 r:.5 B5:.5 A5:1.5 B5:.5 D6:1 B5:.5 A5:.5 F#5:1", "F#5:2 r:.5 A5:.5 B5:1.5 A5:.5 F#5:1 E5:.5 F#5:.5 A5:1",
+        "G5:2 r:.5 B5:.5 C6:1.5 B5:.5 G5:1 E5:.5 G5:.5 B5:1", "C6:2 r:.5 G5:.5 Eb6:1.5 D6:.5 C6:1 A5:.5 G5:.5 A5:1"],
+        last="C6:2 r:.5 G5:.5 Eb6:1.5 D6:.5 C6:1 A5:.5 G5:.5 F#5:1", home="G5"),
+]
+LEAD = dict(osc1__wave="saw", osc1__unison=3, osc1__detune=0.18, osc1__blend=0.5, osc1__spread=0.3, osc1__level=0.8,
+            osc2__wave="saw", osc2__octave=1, osc2__level=0.2, filter__mode='"lowpass 24"', filter__cutoff=9000,
+            filter__res=0.05, voice__mode="mono", voice__drift=0.1)
+
+
+def melody_notes(mel):
+    """[(beat, length, midi)] over the 16 bars: the four units, then three of them and the last, then home."""
+    out, texts = [], mel["units"] + mel["units"][:3] + [mel["last"]]
+    for u, text in enumerate(texts):
+        t = 8.0 * u
+        for tok in text.split():
+            name, d = tok.split(":")
+            if name != "r":
+                out.append((t, float(d), midi(name)))
+            t += float(d)
+        assert abs(t - 8.0 * (u + 1)) < 1e-6, f"{mel['mood']} {mel['shape']} unit {u + 1}: {t - 8.0 * u} beats, not 8"
+    return out + [(64.0, 2.0, midi(mel["home"]))]
+
+
+def melody_fit(mel):
+    """The share of the melody's strong notes (on a chord's hit, or a beat or longer) that are in the chord under them."""
+    mood = next(m for m in MOODS if m["name"] == mel["mood"])
+    seg, _ = mood_segments(mood)
+    strong = ok = 0
+    for t, d, p in melody_notes(mel):
+        under = [c for a, ln, c in seg if a <= t + 1e-9][-1]
+        pcs = {midi(n) % 12 for n in under[1].split()}
+        if d >= 1 or any(abs(t - a) < 1e-9 for a, _, _ in seg):
+            strong += 1
+            ok += p % 12 in pcs
+    return round(ok / max(1, strong), 2)
+
+
 def mood_segments(mood):
     """(beat, length, chord (name, notes, bass)) for the 16 bars: four units, twice; and the snares."""
     seg, snares = [], []
@@ -156,7 +215,7 @@ def mood_segments(mood):
 
 
 # each element alone, LUFS over the 16 bars — the kick and the bass up front (they are what is judged, with the saw)
-TARGETS = {"Kick": -10.0, "Snare": -16.5, "Saw": -14.5, "Bass": -16.0}   # the kick at −13: its hit only 4.8 dB over the mix
+TARGETS = {"Kick": -10.0, "Snare": -16.5, "Saw": -14.5, "Bass": -16.0, "Lead": -14.5}   # the kick at −13: its hit only 4.8 dB over the mix
 
 
 def segments():
@@ -173,7 +232,7 @@ def segments():
     return out
 
 
-def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None):
+def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None, melody=None):
     S, E, L = Script(), [], 4 * BARS + 8
     line = S.line
     seg = seg or segments()
@@ -227,6 +286,17 @@ def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None):
     S.set(S.new('dv'), release=70)
     E.append({"name": "Bass", "strip": bass, "recipe": opt["bass_note"] + ". With every kick, the saw's lengths, no "
               "glide; mono; ducked 14 dB by the kick and back in ~150 ms"})
+    if melody:   # the lead: three saws close together and a quiet octave, as straight as the chords; an echo, a room
+        lead, ldv, lpt = S.instrument("analog", "Lead", L)
+        S.set(ldv, volume=-10, **dict(FLAT, **LEAD))
+        S.notes(lpt, [(p, t, max(0.1, d - 0.04), 112) for t, d, p in melody_notes(melody)])
+        S.device(lead, "delay", time=num(0.75 * 60000 / BPM), feedback=0.3, tone=4000, mix=0.16)
+        S.device(lead, "reverb", decay=1800, size=110, mix=0.14, lowcut=400, highcut=10000, width=0.9)
+        line(f"strip duck {lead} --under {kick} --amount 4")
+        S.set(S.new('dv'), release=90)
+        E.append({"name": "Lead", "strip": lead, "recipe": f"the melody ({melody['shape']}): three saws close together "
+                  "and a quiet octave above, one voice, no glide, no pitch move, flat; a dotted-eighth echo and a room; "
+                  f"{int(100 * melody_fit(melody))} % of its strong notes are in the chord under them"})
     for e in E:
         g = (trim or {}).get(e["name"], 0)
         if g:
@@ -245,7 +315,8 @@ def main():
     ap.add_argument("--cc", default=DEFAULT_CC)
     ap.add_argument("--quick", action="store_true", help="one render, no levelling pass")
     ap.add_argument("--moods", action="store_true", help="five MOODS (chord sets) on one sound, the user's sparser pattern")
-    ap.add_argument("--design", default="808", help="with --moods: which of OPTIONS plays them")
+    ap.add_argument("--melody", action="store_true", help="the MELODIES: a lead over the moods the user loved")
+    ap.add_argument("--design", default="808", help="with --moods / --melody: which of OPTIONS plays them")
     a = ap.parse_args()
     out = os.path.abspath(os.path.expanduser(a.out))
     os.makedirs(out, exist_ok=True)
@@ -263,9 +334,11 @@ def main():
     items, failed = [], 0
     seconds = round((4 * BARS + 8) * 60 / BPM)
     design = next(o for o in OPTIONS if o["name"].lower() == a.design.lower())
-    runs = [(m, design) for m in MOODS] if a.moods else [(None, o) for o in OPTIONS]
-    for k, (mood, opt) in enumerate(runs, 1):
-        sid = f"mood-{k}" if mood else f"drop-{k}"
+    by = {m["name"]: m for m in MOODS}
+    runs = ([(by[x["mood"]], design, x) for x in MELODIES] if a.melody else [(m, design, None) for m in MOODS] if a.moods
+            else [(None, o, None) for o in OPTIONS])
+    for k, (mood, opt, mel) in enumerate(runs, 1):
+        sid = f"melody-{k}" if mel else (f"mood-{k}" if mood else f"drop-{k}")
         if only and str(k) not in only:
             if sid in old:
                 items.append(old[sid])
@@ -274,7 +347,7 @@ def main():
         for attempt in ((1, 2) if not a.quick else (2,)):
             if mood:
                 seg, snares = mood_segments(mood)
-                text, E = arrange(opt, kick, trim, seg, snares, "the kick on 1, 4 and 6 of every two bars (the snare on 3 and 7)")
+                text, E = arrange(opt, kick, trim, seg, snares, "the kick on 1, 4 and 6 of every two bars (the snare on 3 and 7)", mel)
             else:
                 text, E = arrange(opt, kick, trim)
             text = text.replace("project new drop.slp", f"project new {sid}.slp")
@@ -293,7 +366,8 @@ def main():
             if attempt == 1:
                 trim = {n: max(-18, min(18, round(TARGETS[n] - v, 1))) for n, v in lufs.items() if v is not None and v > -60}
         failed += not ok
-        title = (f"Mood {k} — {mood['name']}: {mood['chords']}" if mood else f"Drop {k} — {opt['name']}: {opt['about']}")
+        title = (f"Melody {k} — {mel['shape']}, over {mood['name']} ({mood['chords']})" if mel else
+                 f"Mood {k} — {mood['name']}: {mood['chords']}" if mood else f"Drop {k} — {opt['name']}: {opt['about']}")
         item = {"id": sid, "title": title, "sound": True, "section": "drop",
                 "style": "future-bass", "style_label": "Future bass drop — kick, snare, saw, bass", "bpm": BPM,
                 "key": "E minor", "form_label": "sound — drop", "seconds": seconds,

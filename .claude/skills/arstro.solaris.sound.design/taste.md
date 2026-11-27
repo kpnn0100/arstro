@@ -43,9 +43,27 @@ changes a patch (`scripts/futurebass.py` and `references/analog-patches.md`, tog
 13. **Fewer kicks; chords that carry a mood.** *"make it less kick, just drop snare at 3 and 7, kick at 1, 4, 6, now play
    some more advanced chord that bring mood"*. Over two bars: kick on 1, 4, 6; snare on 3, 7. Triads are not enough:
    ninths, sus chords that resolve, a borrowed minor iv, a bass that walks under a held chord. *(drops.py --moods)*
+14. **Dark, and with a twist.** drops-002: Longing **love** (*"really love the chord progression"*: Em9 · Cmaj7♯11 ·
+   Am9 · B7sus4 → B7) and Falling **love** (*"really bring in the dark mood"*: a bass stepping down under Em to B7);
+   Dreamy good (*"the chord progression have twist point, nice"*: the borrowed Cm6); Lifted good (*"very easy to
+   listen"*); Bittersweet good. Minor with ninths and a dominant that resolves is their centre; one surprising chord
+   in four is welcome. Then: *"you are getting somewhere, try adding melody, i really love the progress"*.
 9. *My own reading, awaiting a verdict:* the earlier batches sat an octave too high; the registers are lower now.
 
 ## Batches
+
+### drops-003 (2026-11-27) — a melody over the loved moods
+
+The same sound and pattern, a lead added on its own strip (three saws close together, no glide, flat; an echo and a
+room), two shapes:
+- **answering**: a held note with the first chord, a figure through the hits, running on alone after the second snare;
+- **soaring**: three long notes on the three hits and one ringing alone in the air.
+
+1 Longing, answering · 2 Longing, soaring · 3 Falling, answering · 4 Falling, soaring · 5 Dreamy, answering (it leans
+on E♭ over the Cm6). Each is four units, then three and a last one that climbs to the leading tone and lands home.
+Measured: 82–97 % of strong notes in the chord under them; 2.89–3.23 bits a note (under the melody skill's 3.25 gate;
+the first drafts measured 4.0–5.0 and were rewritten stepwise); the lead −14.5 LUFS beside the saw's −14.5.
+*Awaiting verdicts.*
 
 ### drops-002 (2026-11-27) — one sound, five moods
 
@@ -56,7 +74,9 @@ The loved design (Drop 2: the wide supersaw, the 808) on the user's sparser patt
 4. **Lifted** — Em7 · Cadd9 · Gsus2 → G · Dsus4 → D, one top note held.
 5. **Falling** — Em(add9) over a bass stepping down E · D♯ · D · C♯ · C · B, to B7.
 
-The third hit of each two bars moves the top note or resolves the chord. Levels as drops-001. *Awaiting verdicts.*
+The third hit of each two bars moves the top note or resolves the chord. Levels as drops-001.
+counts: love 2 · good 3 · okay 0 · weak 0 · no 0 (mean 4.4 — the best batch yet)
+loved: 2 Longing, 5 Falling · good: 1 Bittersweet, 3 Dreamy, 4 Lifted. lesson: 14.
 
 ### drops-001 (2026-11-27) — the bare drop: five saws, five basses
 

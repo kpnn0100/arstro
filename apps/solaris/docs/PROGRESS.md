@@ -64,7 +64,7 @@ line; runs beside it.
 - `[ ]` The melody and sound-design skills are written for a developer running the lab servers;
   each needs an "inside Solaris" section before an in-app agent is given them.
 
-**► K7** — the user judges drops-002 (five chord moods on the loved 808 design, the sparser kick) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► K9** — the user judges drops-003 (five drops with a melody over the moods they loved) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -1070,7 +1070,12 @@ good UI UX, physical base (math base) and follow music industrial standard / lea
       and "more advanced chord that bring mood". Lessons 12, 13.
 - [x] **K6** drops-002: `drops.py --moods` — the loved design on the sparser pattern, five chord sets (Bittersweet,
       Longing, Dreamy, Lifted, Falling).
-- [ ] **K7** The user's verdicts on drops-002 → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
+- [x] **K7** The user's verdicts on drops-002 → taste.md.
+      — love 2 (Longing, Falling), good 3: mean 4.4, the best batch yet. "you are getting somewhere, try adding
+      melody, i really love the progress". Lesson 14.
+- [x] **K8** drops-003: `drops.py --melody` — a straight saw lead over Longing, Falling and Dreamy, answering and
+      soaring; fit 82–97 %, 2.89–3.23 bits.
+- [ ] **K9** The user's verdicts on drops-003 → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
