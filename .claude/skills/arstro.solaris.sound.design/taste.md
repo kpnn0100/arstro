@@ -63,9 +63,23 @@ changes a patch (`scripts/futurebass.py` and `references/analog-patches.md`, tog
 18. **The pluck is clean and thick.** drops-006 (a pluck made by a resonant filter flicking open): *"not this kind of
    pluck, should be clean and thick pluck"*. No resonance, no drive, the filter nearly still; thickness from unison,
    octaves and a sine or saws under the note; the pluck is the amp envelope falling. *(drops.py `THICK`, `--plucks`)*
+19. **Melodic dubstep, in the user's words** (on dubstep-001): *"melodic dubstep need to drop kick on 1 3, snare on 2 4
+   and need hard snare, saw stop on snare, there will be 8 bit pluck arp run with chord, heavy bass, remove wobble
+   bass, use heavy lead to make emotional melody"*. No wobble or LFO bass at all; the saw's stop-at-the-snare rule
+   (lesson 10) holds in this genre too. *My reading:* the count is the slow one (kick and snare each once a bar at
+   150); one option of dubstep-002 counts it fast, to be told which. *(dubstep.py)*
 9. *My own reading, awaiting a verdict:* the earlier batches sat an octave too high; the registers are lower now.
 
 ## Batches
+
+### dubstep-002 (2026-11-27) — melodic dubstep to the user's specification
+
+Kick 1, 3 · a hard snare 2, 4 (tuned up, a rim and a clap in it, attack pushed, clipped; −13 LUFS) · the supersaw from
+kick to snare · an 8-bit arp (one square, 6 bits, sixteenths, C6–B6) · a heavy bass (808 + a driven saw-and-square, no
+LFO) · a heavy lead (the Glass stack + saws an octave below, a tube). Five melodies:
+1 **The cry** (Longing) · 2 **Sighs** (Longing) · 3 **Tears** (Falling) · 4 **The ache** (Dreamy) · 5 **The cry,
+counted fast** (the same with the drums counted at 150).
+*Awaiting verdicts.*
 
 ### dubstep-001 (2026-11-27) — "try melodic dubstep": five drops
 
@@ -78,7 +92,8 @@ new: the chords HELD and pumping, a bigger snare on 3 of every bar, hats, and a 
 5. **Wall** (Dreamy) — chords, lead and a slow half-bar swell bass all at once.
 Measured: every element at its target alone; the growl's brightness moves at 5.0 Hz (an eighth), 7.5 Hz (eighth
 triplets), 1.25 Hz (half a bar) as set; drop 4's quarter-note sweep was not resolved by the measure.
-*Awaiting verdicts.* (drops-007's plucks are still unjudged.)
+No marks; in chat the user gave the genre's shape themselves → lesson 19, dubstep-002. (The growl designs were removed
+from the script.) drops-007's plucks are still unjudged.
 
 ### drops-007 (2026-11-27) — one call and response, five clean, thick plucks
 

@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""dubstep.py — the MELODIC DUBSTEP drop. (The user, 2026-11-27, after the future bass drops: "try melodic dubstep".)
+"""dubstep.py — the MELODIC DUBSTEP drop, to the user's own specification (2026-11-27): "melodic dubstep need to drop
+kick on 1 3, snare on 2 4 and need hard snare, saw stop on snare, there will be 8 bit pluck arp run with chord, heavy
+bass, remove wobble bass, use heavy lead to make emotional melody".
 
     python3 dubstep.py --out ~/Music/Solaris/sound-lab/dubstep-NNN --kick <a kick .wav> [--only 1,3] [--quick]
 
-What the genre is (references/research.md ## Melodic dubstep): half time at 140–150 bpm, the kick on 1 and a BIG snare
-on 3; an emotional chord progression on a wide supersaw that is HELD and pumps under the kick (not chopped, as the
-future bass drop's is); a lead that sings over it; and a GROWL bass — a low saw and pulse through a driven filter that
-an LFO opens and closes on the beat — that talks back to the melody. A clean sub carries the root under everything.
-
-Everything the user has approved is kept: their kick sample, the 808 as the sub, the wide supersaw, the mood chords
-(drops.py MOODS), the Glass stack lead (drops.py LEADS[0]) and its melodies. What is new is the growl, the held and
-pumping chords, the bigger snare, and DROPS: five ways the melody and the growl share the two bars.
+- KICK on 1 and 3, a HARD SNARE on 2 and 4. Counted slow (75 to the minute — the genre's half time): in this
+  150 bpm project a kick on beat 1 and a snare on beat 3 of every bar. One of DROPS (`fast`) counts it at 150 instead.
+- the SAW (the approved wide supersaw, the mood chords) strikes with the kick, holds flat and STOPS at the snare;
+- an 8-BIT PLUCK ARP — one square wave, crushed to 6 bits — runs the chord's notes in sixteenths, high;
+- a HEAVY BASS: the 808 under a driven saw-and-square an octave over it, straight — NO wobble, no LFO at all;
+- a HEAVY LEAD (the loved Glass stack with saws an octave below and drive) plays an emotional melody (drops.py MELODIES).
 
 Each drop is rendered twice — the second time with every element's fader at its target (TARGETS) — and every element
 alone for the lab. Runs solaris-cc with scratch settings in the output folder; the kick is never committed.
@@ -22,66 +22,41 @@ sys.path.insert(0, HERE)
 import drops as D  # noqa: E402
 from drops import Script, num, loudness, DEFAULT_CC, midi, BPM, BARS  # noqa: E402
 
-CHAT, OHAT = 42, 46
-KICKS, SNARES = [0, 4, 5.5], [2, 6]                # in a two-bar unit: 1 · (3) · 1 · the and of 2 · (3)
-CHORD_HITS = [(0, 4), (4, 1.5), (5.5, 2.5)]        # the mood's three voicings: bar one, bar two, the push
-TARGETS = {"Kick": -10.0, "Snare": -15.0, "Hats": -27.0, "Saw": -14.5, "Sub": -16.0, "Growl": -14.5, "Lead": -14.5}
-
-_G = dict(osc1__wave="saw", osc1__octave=-1, osc1__unison=3, osc1__detune=0.18, osc1__blend=0.5, osc1__spread=0.3,
-          osc1__level=0.8, osc2__wave="pulse", osc2__width=0.3, osc2__octave=-1, osc2__level=0.6, sub__level=0,
-          filter__keytrack=0.3, amp__attack=2, amp__decay=0, amp__sustain=1, amp__release=40, velocity=0,
-          voice__mode="mono", voice__glide=0, voice__phase="reset", voice__drift=0, volume=-8)
-GROWLS = {
-    "wub": dict(words="the wobble: three saws and a narrow pulse an octave down through a driven 24 dB ladder at 420 Hz "
-                "that an LFO opens 2.4 octaves and closes again every eighth note; tube saturation after it",
-                patch=dict(_G, filter__mode='"lowpass 24"', filter__cutoff=420, filter__res=0.35, filter__drive=12,
-                           lfo__shape="sine", lfo__sync='"1/8"', lfo__cutoff=2.4),
-                fx=[("saturator", dict(drive=12, curve="tube", mix=1, output=-6))]),
-    "triplet": dict(words="the growl: the same low saw and pulse through a driven band-pass at 650 Hz swept by a "
-                    "triangle LFO in eighth-note TRIPLETS — it rolls against the straight drums; clipped hard",
-                    patch=dict(_G, filter__mode='"bandpass 12"', filter__cutoff=650, filter__res=0.5, filter__drive=14,
-                               lfo__shape="triangle", lfo__sync='"1/8T"', lfo__cutoff=2.0, lfo__width=0.15),
-                    fx=[("saturator", dict(drive=16, curve="hard", mix=1, output=-8))]),
-    "yoi": dict(words="the talking bass: the low saw and pulse through a band-pass that a rising saw LFO sweeps up once "
-                "every quarter note, clipped, then the vowel filter moving OH → EE on each note: it says 'yoi'",
-                patch=dict(_G, filter__mode='"bandpass 12"', filter__cutoff=500, filter__res=0.45, filter__drive=10,
-                           lfo__shape="saw", lfo__sync='"1/4"', lfo__cutoff=2.2),
-                fx=[("saturator", dict(drive=14, curve="hard", mix=1, output=-8)),
-                    ("vowel", dict(resonance=1.2, glide=150, mix=0.7, output=6))], vowel=True),
-    "slow": dict(words="the swell: the low saw and pulse through the driven ladder, opened and closed by a slow sine LFO "
-                 "once every half bar — a long 'wow' under the chords; tube saturation",
-                 patch=dict(_G, filter__mode='"lowpass 24"', filter__cutoff=380, filter__res=0.3, filter__drive=10,
-                            lfo__shape="sine", lfo__sync='"1/2"', lfo__cutoff=2.6),
-                 fx=[("saturator", dict(drive=10, curve="tube", mix=1, output=-6))]),
-}
-
-CALLS = {c["name"]: c for c in D.CALLS}
+CHAT, OHAT, RIM = 42, 46, 37
+TARGETS = {"Kick": -10.0, "Snare": -13.0, "Hats": -28.0, "Saw": -14.5, "Bass": -14.0, "Arp": -21.0, "Lead": -13.5}
+# the two-bar unit (8 beats): (kicks, snares, which of the mood's three voicings each kick strikes)
+GRIDS = {"half": ([0, 4], [2, 6], [0, 2]),                 # kick 1, 3 · snare 2, 4, counted slow (the genre's half time)
+         "fast": ([0, 2, 4, 6], [1, 3, 5, 7], [0, 0, 1, 2])}  # the same words counted at 150
+HEAVY_BASS = dict(osc1__wave="saw", osc1__octave=-1, osc1__unison=1, osc1__level=0.8, osc2__wave="pulse", osc2__width=0.5,
+                  osc2__octave=-1, osc2__unison=1, osc2__level=0.55, sub__level=0, filter__mode='"lowpass 24"',
+                  filter__cutoff=320, filter__res=0.1, filter__drive=14, filter__env=1.6, filter__keytrack=0.3,
+                  fenv__attack=0, fenv__decay=320, fenv__sustain=0.4, fenv__release=80, amp__attack=1, amp__decay=0,
+                  amp__sustain=1, amp__release=40, velocity=0, voice__mode="mono", voice__glide=0, voice__phase="reset",
+                  voice__drift=0, volume=-8)
+BIT = dict(osc1__wave="pulse", osc1__width=0.5, osc1__unison=1, osc1__level=0.9, osc2__level=0, sub__level=0,
+           filter__mode="off", amp__attack=0, amp__decay=140, amp__sustain=0, amp__release=60, velocity=0.2,
+           voice__mode="poly", voice__glide=0, voice__drift=0, volume=-6)
+# the heavy lead: the Glass stack's two layers, and three saws an octave BELOW through a driven ladder
+HEAVY_LEAD = D.LEADS[0]["layers"] + [
+    ("analog", "weight", -12, dict(D._SLIDE, osc1__wave="saw", osc1__unison=3, osc1__detune=0.2, osc1__blend=0.6,
+                                   osc1__spread=0.4, osc1__level=0.8, osc2__wave="pulse", osc2__width=0.45, osc2__level=0.35,
+                                   filter__mode='"lowpass 24"', filter__cutoff=1800, filter__res=0.1, filter__drive=10,
+                                   filter__env=1.5, filter__keytrack=0.5, fenv__attack=4, fenv__decay=420, fenv__sustain=0.5,
+                                   voice__mode="mono", voice__glide=140, volume=-13), "slide")]
+ARPS = {"up": [0, 1, 2, 3], "updown": [0, 1, 2, 3, 2, 1], "jump": [0, 2, 1, 3, 0, 3, 1, 2], "gallop": None}
 MELS = {m["shape"]: m for m in D.MELODIES}
-# Five drops. `chords` and `growl` are the windows (start, end, in beats of the two-bar unit) where each plays;
-# `lead` is a melody in drops.py's shape (four units and a last one).
 DROPS = [
-    dict(name="Soaring", mood="Longing", growl_kind="wub", lead=MELS["the cry"],
-         about="the chords held and pumping all the way, the lead singing over them; the wobble only fills the last "
-               "beat and a half of every two bars — the most melodic of the five",
-         chords=[(0, 8)], growl=[(6.5, 8)]),
-    dict(name="Melody asks, bass answers", mood="Longing", growl_kind="wub",
-         lead=D.call_lines(CALLS["Question and answer"])[0],
-         about="bar one: the chords and the lead's question; then the chords cut out and the wobble answers alone for "
-               "three beats — the classic melodic dubstep trade",
-         chords=[(0, 5)], growl=[(5, 8)]),
-    dict(name="Bass asks, melody answers", mood="Falling", growl_kind="triplet",
-         lead=D.call_lines(CALLS["The pluck calls"])[0],
-         about="the other way round: bar one is the triplet growl alone over the drums, dark; bar two the chords "
-               "open and the lead answers with one long sliding note",
-         chords=[(4, 8)], growl=[(0, 4)]),
-    dict(name="Talking bass", mood="Longing", growl_kind="yoi", lead=D.call_lines(CALLS["Echo"])[0],
-         about="the chords held throughout; the lead sings its three-note rise and the bass says 'yoi' back in each "
-               "gap — a short one after the first phrase, a longer one after the second",
-         chords=[(0, 8)], growl=[(3, 4), (6, 8)]),
-    dict(name="Wall", mood="Dreamy", growl_kind="slow", lead=MELS["the ache"],
-         about="everything at once: the chords held, the lead over them, and the slow swelling bass under the whole "
-               "two bars — the heaviest and fullest",
-         chords=[(0, 8)], growl=[(0, 8)]),
+    dict(name="The cry", mood="Longing", lead=MELS["the cry"], arp="up", grid="half",
+         about="a low start, a climb, a leap to a note held alone; the arp climbs the chord in sixteenths"),
+    dict(name="Sighs", mood="Longing", lead=MELS["sighs"], arp="updown", grid="half",
+         about="falling pairs that lean and resolve; the arp runs up and back down"),
+    dict(name="Tears", mood="Falling", lead=MELS["tears"], arp="jump", grid="half",
+         about="a held note, then a line falling with the bass as it steps down — the darkest; the arp leaps about"),
+    dict(name="The ache", mood="Dreamy", lead=MELS["the ache"], arp="gallop", grid="half",
+         about="a gentle line that reaches E♭ over the borrowed chord; the arp gallops (an eighth and two sixteenths)"),
+    dict(name="The cry, counted fast", mood="Longing", lead=MELS["the cry"], arp="up", grid="fast",
+         about="the SAME music as 1 with 'kick 1 3, snare 2 4' counted at 150 instead of 75 — twice as many drums; "
+               "tell me which count you meant"),
 ]
 
 
@@ -90,131 +65,120 @@ def arrange(drop, kick_file, trim=None):
     line = S.line
     mood = next(m for m in D.MOODS if m["name"] == drop["mood"])
     design = next(o for o in D.OPTIONS if o["name"] == "808")
-    line(f"# melodic dubstep drop — {drop['name']} (arstro.solaris.sound.design dubstep.py) — {BPM} bpm half time")
-    line(f'project new drop.slp --bpm {BPM} --name "Dubstep — {drop["name"]}"')
+    kicks, snares, voic = GRIDS[drop["grid"]]
     units = range(BARS // 2)
-    # the kick: the user's sample
+    hits = []                                                        # (beat, length to the snare, voicing, bass note)
+    for u in units:
+        for k, v in zip(kicks, voic):
+            notes, root = mood["units"][u % 4][v]
+            hits.append((8 * u + k, min(x for x in snares if x > k) - k, notes, root))
+    hits.append((64, 2.0) + tuple(mood["units"][0][0]))
+    count = "1 and 3 … 2 and 4, counted slow" if drop["grid"] == "half" else "1 and 3 … 2 and 4 of every bar at 150"
+    line(f"# melodic dubstep drop — {drop['name']} (arstro.solaris.sound.design dubstep.py) — {BPM} bpm")
+    line(f'project new drop.slp --bpm {BPM} --name "Dubstep — {drop["name"]}"')
     kick, kdv, kpt = S.new('ch'), S.new('dv'), S.new('pt')
     S.new('ac')
     line(f'clip add --instrument sampler --sample "{kick_file}" --at 0 --length {num(L)}')
     line(f'set {kick}.name="Kick" {kpt}.name="Kick" {kpt}.length={num(L)} {kdv}.mode=one-shot {kdv}.release=200 {kdv}.velocity=0')
-    S.notes(kpt, [(60, 8 * u + k, 1.0, 127) for u in units for k in KICKS] + [(60, 64, 1.0, 127)])
-    E.append({"name": "Kick", "strip": kick, "recipe": f"your sample {os.path.basename(kick_file)} on 1 of every bar, "
-              "and once more on the and of 2 in the second bar"})
-    # the snare: big — lower, longer, a clap inside it, a long bright room
+    S.notes(kpt, [(60, t, 1.0, 127) for t, _, _, _ in hits])
+    E.append({"name": "Kick", "strip": kick, "recipe": f"your sample {os.path.basename(kick_file)} on {count.split(' … ')[0]}"})
+    # the snare: HARD — a short, bright crack with a rim and a clap in it, its attack doubled, clipped, a short room
     sn, sdv, spt = S.instrument("drums", "Snare", L)
-    S.set(sdv, snare__tune=0, snare__decay=300, snare__tone=0.7, clap__decay=420, clap__tone=0.55, clap__level=-4, volume=3)
-    S.notes(spt, [(p, 8 * u + t, 0.5, v) for u in units for t in SNARES for p, v in ((D.SNARE, 124), (D.CLAP, 110))])
-    S.device(sn, "transient", attack=35, sustain=0, output=0)
-    S.device(sn, "reverb", decay=1700, size=120, mix=0.24, lowcut=250, highcut=9000, width=1)
-    E.append({"name": "Snare", "strip": sn, "recipe": "the Drum Machine's snare at its own pitch, 300 ms, a clap inside "
-              "it, a sharper attack and a 1.7 s room — on beat 3 of every bar, the genre's big backbeat"})
-    # the hats: quiet eighths, an open one before each snare
+    S.set(sdv, snare__tune=2, snare__decay=210, snare__tone=0.85, clap__decay=260, clap__tone=0.7, clap__level=-5,
+          rim__tune=0, rim__decay=60, rim__level=-6, volume=4)
+    S.notes(spt, [(p, 8 * u + t, 0.4, v) for u in units for t in snares for p, v in ((D.SNARE, 127), (D.CLAP, 112), (RIM, 120))])
+    S.device(sn, "transient", attack=70, sustain=-20, output=0)
+    S.device(sn, "saturator", drive=9, curve="hard", mix=1, output=-5)
+    S.device(sn, "eq", lowcut__on="on", lowcut__freq=120, peak1__freq=200, peak1__gain=3, peak1__q=1.2, highshelf__freq=6000,
+             highshelf__gain=3)
+    S.device(sn, "reverb", decay=1100, size=90, mix=0.13, lowcut=300, highcut=9000, width=1)
+    E.append({"name": "Snare", "strip": sn, "recipe": "HARD: the snare tuned up 2 st, 210 ms, bright, a rim shot and a clap "
+              "inside it; the attack pushed (+70), the tail pulled back, clipped 9 dB, +3 dB of body at 200 Hz and of "
+              f"crack over 6 kHz, a short room — on {count.split(' … ')[1]}; 1.5 dB louder than before"})
     ht, hdv, hpt = S.instrument("drums", "Hats", L)
-    S.set(hdv, chat__decay=45, chat__tone=0.7, ohat__decay=160, ohat__tone=0.65, volume=-6)
-    S.notes(hpt, [(CHAT, 8 * u + 0.5 * k, 0.2, 84 if k % 2 == 0 else 58) for u in units for k in range(16)] +
-                 [(OHAT, 8 * u + t - 0.5, 0.3, 70) for u in units for t in SNARES])
+    S.set(hdv, chat__decay=40, chat__tone=0.7, volume=-6)
+    S.notes(hpt, [(CHAT, 8 * u + 0.5 * k, 0.2, 80 if k % 2 == 0 else 54) for u in units for k in range(16)])
     S.device(ht, "eq", lowcut__on="on", lowcut__freq=600)
-    E.append({"name": "Hats", "strip": ht, "recipe": "closed hats in eighths, quiet, an open hat leading into each snare"})
-
-    def inside(windows, t, d):
-        """The part of (t, t+d) that lies in the first window containing t, or None."""
-        for a, b in windows:
-            if a - 1e-9 <= t < b - 1e-9:
-                return min(d, b - t)
-        return None
-
-    # the saw: the loved supersaw, HELD and pumping
+    E.append({"name": "Hats", "strip": ht, "recipe": "closed hats in eighths, very quiet — only to keep time"})
+    # the saw: strikes with the kick, holds flat, stops at the snare
     bus = S.bus("Saw")
     for kind, part, shift, patch in design["saw"]:
         ch, dv, pt = S.instrument(kind, f"Saw {part}", L)
-        S.set(dv, volume=-10, **dict(D.FLAT, amp__attack=4, amp__release=140, **patch))
-        notes = []
-        for u in units:
-            hits = [(w[0], w[0] + w[1], i) for i, w in enumerate(CHORD_HITS)]
-            for a, b in drop["chords"]:                              # a window starting between hits strikes there too
-                if not any(abs(a - h[0]) < 1e-9 for h in hits):
-                    hits.append((a, min([h[0] for h in hits if h[0] > a] + [8]), max(i for s, e, i in hits if s <= a)))
-            for s, e, i in sorted(hits):
-                d = inside(drop["chords"], s, e - s)
-                if d:
-                    notes += [(midi(n) + shift, 8 * u + s, max(0.1, d - 0.03), 110) for n in mood["units"][u % 4][i][0].split()]
-        notes += [(midi(n) + shift, 64, 2.0, 110) for n in mood["units"][0][0][0].split()]
-        S.notes(pt, notes)
+        S.set(dv, volume=-10, **dict(D.FLAT, **patch))
+        S.notes(pt, [(midi(n) + shift, t, max(0.1, d - 0.04), 110) for t, d, notes, _ in hits for n in notes.split()])
         line(f"route {ch} --to {bus}")
     S.device(bus, "eq", lowcut__on="on", lowcut__freq=150, peak1__freq=350, peak1__gain=-2, peak1__q=1)
     S.device(bus, "imager", width=140, mono="on", frequency=200)
-    S.device(bus, "reverb", decay=2200, size=120, mix=0.14, lowcut=400, highcut=10000, width=1)
+    S.device(bus, "reverb", decay=1200, size=90, mix=0.07, lowcut=400, highcut=10000, width=0.9)
     line(f"strip duck {bus} --under {kick} --amount 12")
-    S.set(S.new('dv'), release=160)
-    line(f"strip duck {bus} --under {sn} --amount 4")
-    S.set(S.new('dv'), release=120)
-    E.append({"name": "Saw", "strip": bus, "recipe": design["saw_note"] + f". HELD ({mood['chords']}), a 2.2 s room; it "
-              "ducks 12 dB under every kick and swells back in 160 ms (the pump), 4 dB under the snare"})
-    # the sub: the 808, the root under everything
+    S.set(S.new('dv'), release=90)
+    E.append({"name": "Saw", "strip": bus, "recipe": design["saw_note"] + f" ({mood['chords']}). It strikes with every "
+              "kick, holds flat and STOPS at the snare; nearly dry; ducked 12 dB by the kick"})
+    # the heavy bass: the 808 and a driven saw-and-square over it, with the saw — no LFO anywhere
+    bbus = S.bus("Bass")
     kind, shift, patch, fx = design["bass"]
-    sub, bdv, bpt = S.instrument(kind, "Sub", L)
+    sub, bdv, bpt = S.instrument(kind, "Bass 808", L)
     S.set(bdv, **patch)
-    S.notes(bpt, [(midi(mood["units"][u % 4][i][1]) + shift, 8 * u + s, d - 0.04, 115)
-                  for u in units for i, (s, d) in enumerate(CHORD_HITS)] + [(midi(mood["units"][0][0][1]) + shift, 64, 2.0, 115)])
-    S.device(sub, "imager", width=0, mono="on", frequency=200)
-    line(f"strip duck {sub} --under {kick} --amount 14")
+    S.notes(bpt, [(midi(root) + shift, t, max(0.1, d - 0.04), 115) for t, d, _, root in hits])
+    line(f"route {sub} --to {bbus}")
+    hv, hvd, hvp = S.instrument("analog", "Bass heavy", L)
+    S.set(hvd, **HEAVY_BASS)
+    S.notes(hvp, [(midi(root) + (12 if midi(root) < midi("C2") else 0) + 12, t, max(0.1, d - 0.04), 115) for t, d, _, root in hits])
+    S.device(hv, "saturator", drive=12, curve="tube", mix=1, output=-6)
+    S.device(hv, "eq", lowcut__on="on", lowcut__freq=90)
+    line(f"set {hv}.gain=-4")
+    line(f"route {hv} --to {bbus}")
+    S.device(bbus, "imager", width=0, mono="on", frequency=250)
+    line(f"strip duck {bbus} --under {kick} --amount 12")
     S.set(S.new('dv'), release=70)
-    E.append({"name": "Sub", "strip": sub, "recipe": design["bass_note"] + ". The root, held under chords and growl alike; "
-              "mono; ducked 14 dB by the kick"})
-    # the growl: the mid bass that talks; its lows cut so the sub stays clean
-    g = GROWLS[drop["growl_kind"]]
-    gr, gdv, gpt = S.instrument("analog", "Growl", L)
-    S.set(gdv, **g["patch"])
-    gn, steps = [], [0, 0, 12, 0, 7, 0, 12, 10]
+    E.append({"name": "Bass", "strip": bbus, "recipe": "HEAVY, no wobble: the 808 (a sine with a 5-semitone thump, driven) "
+              "and, an octave over it, a saw and a square through a 24 dB ladder at 320 Hz driven 14 dB, its filter "
+              "falling 1.6 octaves in 0.3 s at each note, then tube saturation — no LFO at all. With the saw, kick to "
+              "snare; mono; ducked 12 dB by the kick"})
+    # the 8-bit pluck arp: one square wave crushed to 6 bits, the chord's notes in sixteenths, high
+    ar, adv, apt = S.instrument("analog", "Arp", L)
+    S.set(adv, **BIT)
+    an, pat = [], ARPS[drop["arp"]]
     for u in units:
-        k = 0
-        for a, b in drop["growl"]:
-            t = a
-            while t < b - 1e-9:
-                d = min(1.0 if (b - a) <= 4 else 2.0, b - t)
-                hit = max(i for i, (s, _) in enumerate(CHORD_HITS) if s <= t + 1e-9)
-                root = midi(mood["units"][u % 4][hit][1])
-                root += 12 if root < midi("C2") else 0                # the growl an octave over the sub: C2 … B2
-                gn.append((root + 12 + steps[k % len(steps)], 8 * u + t, d - 0.05, 118))
-                t, k = t + d, k + 1
-    S.notes(gpt, gn)
-    for fkind, fparams in g["fx"]:
-        fdv = S.device(gr, fkind, **fparams)
-        if fkind == "vowel":                                         # every note starts on OH and moves to EE: "yoi"
-            au = S.new('au')
-            line(f'auto add --name "Growl · Vowel" --min 0 --max 4 --length {num(L)} --rest 3')
-            for p, t, d, v in gn:
-                line(f"auto point add {au} --at {num(t)} --value 3 --shape hold")
-                line(f"auto point add {au} --at {num(t + 0.3)} --value 2 --shape hold")
-            S.new('ac')
-            line(f"clip add --auto {au} --at 0 --length {num(L)}")
-            line(f'set {fdv}.vowel="={au}"')
-    S.device(gr, "eq", lowcut__on="on", lowcut__freq=120, peak1__freq=2500, peak1__gain=2, peak1__q=0.8)
-    S.device(gr, "imager", width=120, mono="on", frequency=250)
-    S.device(gr, "reverb", decay=700, size=60, mix=0.07, lowcut=500, highcut=9000, width=0.9)
-    line(f"strip duck {gr} --under {kick} --amount 8")
-    S.set(S.new('dv'), release=70)
-    wins = " and ".join(f"beats {num(a + 1)}–{num(b + 1)}" for a, b in drop["growl"])
-    E.append({"name": "Growl", "strip": gr, "recipe": g["words"] + f". It plays {wins} of every two bars, on the chord's "
-              "root with jumps to the octave and the fifth; low cut 120 Hz (the sub is the 808's); ducked 8 dB by the kick"})
-    # the lead: the Glass stack
-    lead, mel = D.LEADS[0], drop["lead"]
+        for i in range(32):
+            t = 8 * u + 0.25 * i
+            if pat is None and i % 4 == 1:                           # the gallop: an eighth and two sixteenths
+                continue
+            notes = [h for h in hits if h[0] <= t + 1e-9][-1][2].split()
+            pcs = sorted({midi(n) % 12 for n in notes[-4:]})
+            tones = sorted(84 + (pc - 84) % 12 for pc in pcs)        # C6 … B6
+            k = i if pat is None else pat[i % len(pat)]
+            an.append((tones[k % len(tones)], t, 0.2, 110 if i % 4 == 0 else 86))
+    S.notes(apt, an)
+    S.device(ar, "bitcrusher", bits=6, rate=11025, mix=1, output=0)
+    S.device(ar, "eq", lowcut__on="on", lowcut__freq=500, highcut__on="on", highcut__freq=9000)
+    S.device(ar, "imager", width=120)
+    S.device(ar, "delay", time=num(0.75 * 60000 / BPM), feedback=0.25, tone=5000, mix=0.12)
+    line(f"strip duck {ar} --under {kick} --amount 4")
+    S.set(S.new('dv'), release=90)
+    E.append({"name": "Arp", "strip": ar, "recipe": "8-BIT: one square wave, no filter, each note gone in 140 ms, crushed to "
+              f"6 bits at 11 kHz; it runs the top four notes of whatever chord is sounding in sixteenths ({drop['arp']}), "
+              "C6–B6, all the way through; a faint echo"})
+    # the heavy lead
+    mel = drop["lead"]
     lbus = S.bus("Lead")
     mn = D.melody_notes(mel)
     tied = [i + 1 < len(mn) and abs(mn[i + 1][0] - (t + d)) < 1e-6 for i, (t, d, p) in enumerate(mn)]
-    for kind, part, shift, patch, how in lead["layers"]:
+    for kind, part, shift, patch, how in HEAVY_LEAD:
         ch, dv, pt = S.instrument(kind, f"Lead {part}", L)
         S.set(dv, **dict(dict(D.FLAT, volume=-10), **patch))
         S.notes(pt, [(p + shift, t, d + 0.06 if tie else max(0.1, d - 0.06), 112) for (t, d, p), tie in zip(mn, tied)])
         line(f"route {ch} --to {lbus}")
-    S.device(lbus, "eq", lowcut__on="on", lowcut__freq=180, peak1__freq=2800, peak1__gain=2, peak1__q=0.8)
-    S.device(lbus, "delay", time=num(0.75 * 60000 / BPM), feedback=0.34, tone=4000, mix=0.2)
-    S.device(lbus, "reverb", decay=3000, size=130, mix=0.22, lowcut=400, highcut=10000, width=1)
-    line(f"strip duck {lbus} --under {kick} --amount 5")
-    S.set(S.new('dv'), release=110)
-    E.append({"name": "Lead", "strip": lbus, "recipe": f"the lead you loved (the Glass stack: {lead['recipe']}); "
-              f"the line — {mel['shape']}: {mel['how']}; a longer echo and a 3 s room"})
+    S.device(lbus, "saturator", drive=5, curve="tube", mix=1, output=-3)
+    S.device(lbus, "eq", lowcut__on="on", lowcut__freq=150, peak1__freq=2800, peak1__gain=2, peak1__q=0.8)
+    S.device(lbus, "delay", time=num(0.75 * 60000 / BPM), feedback=0.34, tone=4000, mix=0.18)
+    S.device(lbus, "reverb", decay=2800, size=130, mix=0.2, lowcut=400, highcut=10000, width=1)
+    line(f"strip duck {lbus} --under {kick} --amount 4")
+    S.set(S.new('dv'), release=100)
+    E.append({"name": "Lead", "strip": lbus, "recipe": "HEAVY: the lead you loved (the Glass stack — saws, pulses, a filter "
+              "that opens at each note, a 140 ms slide) with three saws and a pulse an OCTAVE BELOW through a driven "
+              f"ladder, the whole lead through a tube; 1 dB louder than the chords. The melody — {mel['shape']}: "
+              f"{mel['how']}; {int(100 * D.melody_fit(mel))} % of its strong notes are in the chord"})
     for e in E:
         gdb = (trim or {}).get(e["name"], 0)
         if gdb:

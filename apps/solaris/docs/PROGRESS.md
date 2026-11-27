@@ -64,7 +64,7 @@ line; runs beside it.
 - `[ ]` The melody and sound-design skills are written for a developer running the lab servers;
   each needs an "inside Solaris" section before an in-app agent is given them.
 
-**► K19** — the user judges dubstep-001 (five melodic dubstep drops) and drops-007 (five clean, thick plucks) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► K21** — the user judges dubstep-002 (melodic dubstep to their specification: hard snare, 8-bit arp, heavy bass and lead) and drops-007 (five clean, thick plucks) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -1093,7 +1093,11 @@ good UI UX, physical base (math base) and follow music industrial standard / lea
 - [ ] **K17** The user's verdicts on drops-007 → taste.md (still open; the user moved on to "try melodic dubstep").
 - [x] **K18** dubstep-001: `dubstep.py` — the melodic dubstep drop on the approved parts, with held pumping chords, a
       big snare, hats and a growl bass (four kinds); five drops; the wobble rates measured in the stems.
-- [ ] **K19** The user's verdicts on dubstep-001 → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
+- [x] **K19** The user's verdict on dubstep-001 (chat) → taste.md lesson 19: the genre's shape in their words; no
+      wobble bass.
+- [x] **K20** dubstep-002: `dubstep.py` rewritten to it — hard snare, saw to the snare, an 8-bit arp, a heavy bass with
+      no LFO, a heavy lead; five melodies, one counted fast to settle the count.
+- [ ] **K21** The user's verdicts on dubstep-002 → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
