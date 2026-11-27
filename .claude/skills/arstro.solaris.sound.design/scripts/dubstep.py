@@ -44,20 +44,29 @@ HEAVY_LEAD = D.LEADS[0]["layers"] + [
                                    filter__env=1.5, filter__keytrack=0.5, fenv__attack=4, fenv__decay=420, fenv__sustain=0.5,
                                    voice__mode="mono", voice__glide=140, volume=-13), "slide")]
 ARPS = {"up": [0, 1, 2, 3], "updown": [0, 1, 2, 3, 2, 1], "jump": [0, 2, 1, 3, 0, 3, 1, 2], "gallop": None}
-MELS = {m["shape"]: m for m in D.MELODIES}
-DROPS = [
-    dict(name="The cry", mood="Longing", lead=MELS["the cry"], arp="up", grid="half",
-         about="a low start, a climb, a leap to a note held alone; the arp climbs the chord in sixteenths"),
-    dict(name="Sighs", mood="Longing", lead=MELS["sighs"], arp="updown", grid="half",
-         about="falling pairs that lean and resolve; the arp runs up and back down"),
-    dict(name="Tears", mood="Falling", lead=MELS["tears"], arp="jump", grid="half",
-         about="a held note, then a line falling with the bass as it steps down — the darkest; the arp leaps about"),
-    dict(name="The ache", mood="Dreamy", lead=MELS["the ache"], arp="gallop", grid="half",
-         about="a gentle line that reaches E♭ over the borrowed chord; the arp gallops (an eighth and two sixteenths)"),
-    dict(name="The cry, counted fast", mood="Longing", lead=MELS["the cry"], arp="up", grid="fast",
-         about="the SAME music as 1 with 'kick 1 3, snare 2 4' counted at 150 instead of 75 — twice as many drums; "
-               "tell me which count you meant"),
+# SIMPLE melodies (the user, 2026-11-28: "please make more simple melody, you are not ready for advanced melody"):
+# two or three long notes a unit, every one a note of the chord under it, ONE rhythm repeated in all four units, steps
+# and thirds, inside an octave. In drops.py MELODIES' shape.
+SIMPLE = [
+    dict(mood="Longing", shape="Three notes", how="a long note, a step down, a long note — the same rhythm every two "
+         "bars, a step higher over the third chord",
+         units=["B5:3 A5:1 G5:4", "B5:3 A5:1 G5:4", "C6:3 B5:1 A5:4", "B5:3 A5:1 F#5:4"], last="B5:3 A5:1 B5:4", home="E6"),
+    dict(mood="Longing", shape="One note a bar", how="one held note in each bar, falling a step or a third — eight "
+         "notes in eight bars",
+         units=["G5:4 F#5:4", "G5:4 E5:4", "E5:4 C5:4", "F#5:4 D#5:4"], last="F#5:4 B5:4", home="E5"),
+    dict(mood="Falling", shape="The rise", how="two short steps up the chord and a long note at the top — the same "
+         "climb each time, one note higher over the third chord",
+         units=["E5:2 G5:2 B5:4", "E5:2 G5:2 B5:4", "E5:2 G5:2 C6:4", "F#5:2 A5:2 B5:4"], last="F#5:2 B5:2 D#6:4", home="E6"),
+    dict(mood="Dreamy", shape="Hold and fall", how="one long high note, then two notes falling away; over the borrowed "
+         "chord the long note is its E♭",
+         units=["D6:5 B5:1 A5:2", "D6:5 A5:1 F#5:2", "E6:5 D6:1 B5:2", "Eb6:5 D6:1 C6:2"], last="Eb6:5 D6:1 A5:2", home="G5"),
+    dict(mood="Longing", shape="Say it, wait", how="three notes falling down the chord in the first bar, then silence "
+         "for a whole bar — the drums, the chords and the arp answer",
+         units=["B5:1 G5:1 E5:2 r:4", "B5:1 G5:1 E5:2 r:4", "C6:1 A5:1 E5:2 r:4", "B5:1 A5:1 F#5:2 r:4"],
+         last="B5:1 A5:1 B5:2 r:4", home="E5"),
 ]
+DROPS = [dict(name=m["shape"], mood=m["mood"], lead=m, arp=a, grid="half", about=m["how"])
+         for m, a in zip(SIMPLE, ["up", "updown", "up", "gallop", "updown"])]
 
 
 def arrange(drop, kick_file, trim=None):

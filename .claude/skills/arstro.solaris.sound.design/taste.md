@@ -69,13 +69,25 @@ changes a patch (`scripts/futurebass.py` and `references/analog-patches.md`, tog
    (lesson 10) holds in this genre too. *My reading:* the count is the slow one (kick and snare each once a bar at
    150); one option of dubstep-002 counts it fast, to be told which. Then, on dubstep-002: *"arp stop when snare"* —
    the arp plays from the kick to the snare, like the saw (dubstep-003). *(dubstep.py)*
+20. **Simple melodies.** On dubstep-003 (the "emotional" melodies of drops-004 on a heavy lead): *"please make more
+   simple melody, you are not ready for advanced melody"* (2026-11-28). Two or three long notes in two bars, each a
+   note of the chord, ONE rhythm repeated in every unit, steps and thirds, inside an octave. Leaps, sighs, late
+   climaxes and call-and-response wait until a simple line has been approved. *(dubstep.py `SIMPLE`)*
 9. *My own reading, awaiting a verdict:* the earlier batches sat an octave too high; the registers are lower now.
 
 ## Batches
 
+### dubstep-004 (2026-11-28) — the same drop, five SIMPLE melodies
+
+1 **Three notes** (Longing: long, a step down, long) · 2 **One note a bar** (Longing) · 3 **The rise** (Falling: two
+steps up, a long note) · 4 **Hold and fall** (Dreamy) · 5 **Say it, wait** (Longing: three notes, then a bar of rest).
+17–25 notes in 16 bars (the earlier ones: 50–60); 84–100 % of strong notes in the chord. All in the slow count — the
+count question (lesson 19) is still unanswered. *Awaiting verdicts.*
+
 ### dubstep-003 (2026-11-27) — dubstep-002 with the arp stopping at the snare
 
-The same five drops; the 8-bit arp now runs only from each kick to the snare, with the saw. *Awaiting verdicts.*
+The same five drops; the 8-bit arp now runs only from each kick to the snare, with the saw.
+No marks; in chat: "please make more simple melody, you are not ready for advanced melody" → lesson 20, dubstep-004.
 
 ### dubstep-002 (2026-11-27) — melodic dubstep to the user's specification
 
