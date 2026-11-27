@@ -48,9 +48,24 @@ changes a patch (`scripts/futurebass.py` and `references/analog-patches.md`, tog
    Dreamy good (*"the chord progression have twist point, nice"*: the borrowed Cm6); Lifted good (*"very easy to
    listen"*); Bittersweet good. Minor with ninths and a dominant that resolves is their centre; one surprising chord
    in four is welcome. Then: *"you are getting somewhere, try adding melody, i really love the progress"*.
+15. **The lead slides, and the melody must move the listener.** On drops-003 (a straight lead, stepwise lines): *"for
+   the lead it need portamento and try different melody that is more emotion"*. The no-glide rule (lesson 10) is the
+   CHORD saw's, not the lead's. *(the lead: legato, an 80 ms glide, a late vibrato; melodies built on a reach, a sigh,
+   the ♭6 → 5, a leading tone left hanging — and allowed to measure more "surprising" than the melody skill's gate,
+   because a reach is a leap)*
 9. *My own reading, awaiting a verdict:* the earlier batches sat an octave too high; the registers are lower now.
 
 ## Batches
+
+### drops-004 (2026-11-27) — a lead with portamento, five melodies built on feeling
+
+The same sound, pattern and moods; the lead now slides (measured on a fifth: 658 Hz, 787 Hz mid-slide, 980 Hz) and
+has a late vibrato. 1 **the cry** (Longing): a climb, then a leap to a note held alone, E6 at the third phrase ·
+2 **sighs** (Longing): falling pairs, lean and resolve · 3 **tears** (Falling): a held note, then a line falling with
+the bass, each phrase a third higher · 4 **the reach** (Falling): one long low note, a slide up a fifth, a sixth, a
+minor sixth · 5 **the ache** (Dreamy): the line reaches E♭ over the borrowed Cm6 and holds it.
+Measured: 80–100 % of strong notes in the chord; 3.49–3.85 bits a note — over the 3.25 gate, knowingly (lesson 15).
+*Awaiting verdicts.*
 
 ### drops-003 (2026-11-27) — a melody over the loved moods
 
@@ -63,7 +78,8 @@ room), two shapes:
 on E♭ over the Cm6). Each is four units, then three and a last one that climbs to the leading tone and lands home.
 Measured: 82–97 % of strong notes in the chord under them; 2.89–3.23 bits a note (under the melody skill's 3.25 gate;
 the first drafts measured 4.0–5.0 and were rewritten stepwise); the lead −14.5 LUFS beside the saw's −14.5.
-*Awaiting verdicts.*
+No marks on the page; in chat: "for the lead it need portamento and try different melody that is more emotion"
+→ lesson 15, drops-004. (The stepwise rewrite had taken the feeling out with the leaps.)
 
 ### drops-002 (2026-11-27) — one sound, five moods
 

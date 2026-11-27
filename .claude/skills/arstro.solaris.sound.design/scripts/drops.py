@@ -140,35 +140,47 @@ MOODS = [
 ]
 
 
-# ── drops-003: a MELODY over the moods the user loved ──────────────────────────────────────────────────────────────
-# A lead on its own strip, as straight as the saw (no glide, no pitch move). Each melody is four two-bar units and a
-# last unit that replaces the fourth the second time round, landing home. Written in order, 'B5:2 r:.5 G5:.5 …', a
-# unit 8 beats. Two shapes: ANSWERING — a held note with the first chord, then a figure that moves through the hits
-# and runs on alone in the air after the second snare; SOARING — three long notes on the three hits and one more
-# ringing alone in the air.
+# ── the MELODY over the moods the user loved (drops-003, rewritten for drops-004) ───────────────────────────────────
+# A lead on its own strip. drops-003's was as straight as the saw and its lines moved by step; the user: "for the lead
+# it need portamento and try different melody that is more emotion". So the lead SLIDES (legato, an 80 ms glide, a
+# late vibrato), and each melody is built on a device that carries feeling: a reach (a leap up to a held note), a sigh
+# (a leaning note falling a step onto the chord), the dark ♭6 → 5, the leading tone left hanging. Each is four two-bar
+# units, then three and a last that lands home. Written in order, 'B4:1 E5:1 r:.5 …', a unit 8 beats; the chords hit
+# on beats 1, 4 and 6 of the unit, and from beat 7 the lead is alone.
 MELODIES = [
-    dict(mood="Longing", shape="answering", units=[
-        "B5:2 r:.5 A5:.5 B5:1.5 A5:.5 G5:1 F#5:.5 G5:.5 A5:1", "G5:2 r:.5 F#5:.5 G5:1.5 F#5:.5 E5:1 D5:.5 E5:.5 F#5:1",
-        "E5:2 r:.5 D5:.5 E5:1.5 D5:.5 C5:1 B4:.5 C5:.5 E5:1", "F#5:2 r:.5 F#5:.5 A5:1.5 B5:.5 B5:1 A5:.5 B5:.5 D#6:1"],
-        last="F#5:2 r:.5 F#5:.5 A5:1.5 B5:.5 D#6:1 D#6:.5 E6:.5 F#6:1", home="E6"),
-    dict(mood="Longing", shape="soaring", units=[
-        "G5:3 F#5:2 G5:1 A5:2", "G5:3 F#5:2 E5:1 F#5:2", "E5:3 G5:2 A5:1 B5:2", "B5:3 A5:2 B5:1 A5:2"],
-        last="B5:3 A5:2 B5:1 D#6:2", home="E6"),
-    dict(mood="Falling", shape="answering", units=[
-        "B5:2 r:.5 B5:.5 A5:1.5 G5:.5 F#5:1 G5:.5 A5:.5 B5:1", "D6:2 r:.5 B5:.5 A5:1.5 G5:.5 E5:1 F#5:.5 G5:.5 A5:1",
-        "G5:2 r:.5 G5:.5 B5:1.5 A5:.5 G5:1 F#5:.5 E5:.5 G5:1", "F#5:2 r:.5 F#5:.5 A5:1.5 B5:.5 B5:1 A5:.5 B5:.5 D#6:1"],
-        last="F#5:2 r:.5 F#5:.5 A5:1.5 B5:.5 D#6:1 D#6:.5 E6:.5 F#6:1", home="E6"),
-    dict(mood="Falling", shape="soaring", units=[
-        "B5:3 G5:2 F#5:1 G5:2", "B5:3 A5:2 G5:1 E5:2", "E5:3 G5:2 A5:1 B5:2", "B5:3 A5:2 B5:1 A5:2"],
-        last="B5:3 A5:2 B5:1 D#6:2", home="E6"),
-    dict(mood="Dreamy", shape="answering", units=[
-        "D6:2 r:.5 B5:.5 A5:1.5 B5:.5 D6:1 B5:.5 A5:.5 F#5:1", "F#5:2 r:.5 A5:.5 B5:1.5 A5:.5 F#5:1 E5:.5 F#5:.5 A5:1",
-        "G5:2 r:.5 B5:.5 C6:1.5 B5:.5 G5:1 E5:.5 G5:.5 B5:1", "C6:2 r:.5 G5:.5 Eb6:1.5 D6:.5 C6:1 A5:.5 G5:.5 A5:1"],
-        last="C6:2 r:.5 G5:.5 Eb6:1.5 D6:.5 C6:1 A5:.5 G5:.5 F#5:1", home="G5"),
+    dict(mood="Longing", shape="the cry", how="a low start, a climb, then a leap up to a note held alone; the third "
+         "phrase reaches E6, the fourth falls back in sighs",
+         units=["B4:1 E5:1 r:.5 F#5:.5 G5:2 F#5:1 B5:2", "A5:.5 G5:1.5 r:.5 E5:.5 F#5:2 E5:1 G5:2",
+                "E5:1 A5:1 r:.5 B5:.5 C6:2 B5:1 E6:2", "E6:.5 B5:1.5 r:.5 A5:.5 F#5:2 D#5:1 F#5:2"],
+         last="E6:.5 B5:1.5 r:.5 A5:.5 B5:2 D#6:1 F#6:2", home="E6"),
+    dict(mood="Longing", shape="sighs", how="pairs of notes falling a step, the first leaning on the chord, the second "
+         "resolving; the dark G → F♯ over the dominant",
+         units=["A5:1 G5:1 r:.5 B5:.5 D6:1 B5:1 A5:1 G5:2", "F#5:1 E5:1 r:.5 G5:.5 B5:1 G5:1 F#5:1 E5:2",
+                "B5:1 A5:1 r:.5 C6:.5 E6:1 C6:1 B5:1 A5:2", "G5:1 F#5:1 r:.5 A5:.5 B5:1 A5:1 F#5:1 D#5:2"],
+         last="G5:1 F#5:1 r:.5 A5:.5 B5:1 A5:1 B5:1 D#6:2", home="E6"),
+    dict(mood="Falling", shape="tears", how="a held note, then a line that falls with the bass; each phrase starts a "
+         "third higher (B, D, E) before the last climbs to the leading tone and hangs",
+         units=["B5:2 r:.5 B5:.5 A5:.5 G5:1.5 F#5:1 E5:2", "D6:2 r:.5 D6:.5 C6:.5 B5:1.5 G5:1 E5:2",
+                "E6:2 r:.5 E6:.5 D6:.5 C6:1.5 B5:1 G5:2", "F#5:2 r:.5 F#5:.5 G5:.5 A5:1.5 B5:1 D#6:2"],
+         last="F#5:2 r:.5 F#5:.5 G5:.5 A5:1.5 B5:1 D#6:2", home="E6"),
+    dict(mood="Falling", shape="the reach", how="one long low note, then a slide up a fifth, a sixth, a minor sixth "
+         "to the next — the portamento carries it — and two notes falling away",
+         units=["E5:3 B5:2 A5:.5 G5:.5 F#5:2", "D5:3 B5:2 A5:.5 G5:.5 E5:2", "E5:3 C6:2 B5:.5 A5:.5 G5:2",
+                "F#5:3 B5:2 A5:.5 B5:.5 D#6:2"],
+         last="F#5:3 B5:2 D#6:.5 E6:.5 F#6:2", home="E6"),
+    dict(mood="Dreamy", shape="the ache", how="a gentle falling pair, a rise to a held note; over the borrowed Cm6 the "
+         "line reaches E♭ — the one note outside the key — and holds it",
+         units=["B5:1 A5:1 r:.5 B5:.5 D6:2 B5:1 A5:2", "A5:1 F#5:1 r:.5 A5:.5 B5:2 A5:1 F#5:2",
+                "B5:1 G5:1 r:.5 B5:.5 E6:2 D6:1 B5:2", "C6:1 G5:1 r:.5 C6:.5 Eb6:2 D6:1 C6:2"],
+         last="C6:1 G5:1 r:.5 C6:.5 Eb6:2 D6:1 A5:2", home="G5"),
 ]
 LEAD = dict(osc1__wave="saw", osc1__unison=3, osc1__detune=0.18, osc1__blend=0.5, osc1__spread=0.3, osc1__level=0.8,
             osc2__wave="saw", osc2__octave=1, osc2__level=0.2, filter__mode='"lowpass 24"', filter__cutoff=9000,
-            filter__res=0.05, voice__mode="mono", voice__drift=0.1)
+            filter__res=0.05, voice__drift=0.1,
+            # the portamento: one voice that slides to the next note in 80 ms without striking again, and a vibrato
+            # that comes in a quarter of a second after a phrase begins
+            voice__mode="legato", voice__glide=80, amp__attack=12, amp__release=60, lfo__shape="sine", lfo__rate=5.3,
+            lfo__fade=280, lfo__pitch=0.14)
 
 
 def melody_notes(mel):
@@ -289,13 +301,17 @@ def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None, m
     if melody:   # the lead: three saws close together and a quiet octave, as straight as the chords; an echo, a room
         lead, ldv, lpt = S.instrument("analog", "Lead", L)
         S.set(ldv, volume=-10, **dict(FLAT, **LEAD))
-        S.notes(lpt, [(p, t, max(0.1, d - 0.04), 112) for t, d, p in melody_notes(melody)])
+        mn = melody_notes(melody)
+        # a note that runs straight into the next overlaps it (so the voice slides); one before a rest ends early
+        tied = [i + 1 < len(mn) and abs(mn[i + 1][0] - (t + d)) < 1e-6 for i, (t, d, p) in enumerate(mn)]
+        S.notes(lpt, [(p, t, d + 0.06 if tie else max(0.1, d - 0.06), 112) for (t, d, p), tie in zip(mn, tied)])
         S.device(lead, "delay", time=num(0.75 * 60000 / BPM), feedback=0.3, tone=4000, mix=0.16)
         S.device(lead, "reverb", decay=1800, size=110, mix=0.14, lowcut=400, highcut=10000, width=0.9)
         line(f"strip duck {lead} --under {kick} --amount 4")
         S.set(S.new('dv'), release=90)
-        E.append({"name": "Lead", "strip": lead, "recipe": f"the melody ({melody['shape']}): three saws close together "
-                  "and a quiet octave above, one voice, no glide, no pitch move, flat; a dotted-eighth echo and a room; "
+        E.append({"name": "Lead", "strip": lead, "recipe": f"the melody — {melody['shape']}: {melody['how']}. Three saws "
+                  "close together and a quiet octave above, one voice with PORTAMENTO (it slides to each next note in "
+                  "80 ms), a late vibrato; a dotted-eighth echo and a room; "
                   f"{int(100 * melody_fit(melody))} % of its strong notes are in the chord under them"})
     for e in E:
         g = (trim or {}).get(e["name"], 0)
