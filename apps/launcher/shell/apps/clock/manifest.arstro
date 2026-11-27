@@ -1,0 +1,6 @@
+# The bundle manifest: `key = value`. id, name and exec are required.
+id = arstro.clock
+name = Clock
+version = 1.0.0
+exec = bin/arstro-clock
+accent = #E3B341

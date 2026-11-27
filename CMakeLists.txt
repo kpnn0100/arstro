@@ -26,6 +26,7 @@ option(ARSTRO_BUILD_INTERSTELLAR "Build Interstellar (interstellar_core, interst
 option(ARSTRO_BUILD_SOLARIS "Build Solaris (the DAW: solaris_model, engine, core, solaris-cc, GUI)" ON)
 option(ARSTRO_BUILD_GENESIS "Build Genesis (animation designer: genesis_core, genesis-cc, GUI)" ON)
 option(ARSTRO_BUILD_ANDROID_SHELL "Build the Android-theme touch shell (apps/launcher/android-shell)" ON)
+option(ARSTRO_BUILD_SHELL "Build the Arstro touch stack: arstro-shell, its app SDK and apps (apps/launcher/shell)" ON)
 option(ARSTRO_BUILD_DSP "Build the Arstro DSP library + synth/kitchen-sink/piano-demo apps" ON)
 option(ARSTRO_BUILD_ARSTROBENCH "Build Arstrobench (the ImageProcessing + DSP benchmark GUI)" ON)
 option(ARSTRO_BUILD_PIANO_UI "Build the interactive piano-keyboard UI demo (examples/piano; needs GTK3+ALSA, skipped gracefully if absent)" ON)
@@ -104,6 +105,18 @@ if(ARSTRO_BUILD_ARSTROBENCH)
     add_subdirectory(apps/arstrobench)
   else()
     message(STATUS "arstrobench: skipped (needs ARSTRO_BUILD_DSP=ON for the signal workload)")
+  endif()
+endif()
+
+# arstro-shell: the touch stack — a shell that owns the screen (SDL3), the SDK apps are written
+# against, and the apps. It REPLACES the GNOME/Plasma android-shell below as the launcher's
+# direction (apps/launcher/shell/REQUIREMENTS.md, R-SCOPE-1). POSIX today: the app protocol is a
+# unix socket and shared memory; the Windows seam is protocol/Channel.
+if(ARSTRO_BUILD_SHELL)
+  if(UNIX)
+    add_subdirectory(apps/launcher/shell)
+  else()
+    message(STATUS "arstro-shell: skipped (the app protocol is POSIX-only today; host is ${CMAKE_SYSTEM_NAME})")
   endif()
 endif()
 

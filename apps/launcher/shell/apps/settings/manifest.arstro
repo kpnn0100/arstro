@@ -1,0 +1,6 @@
+id = arstro.settings
+name = Settings
+version = 1.0.0
+exec = bin/arstro-settings
+accent = #8A93A6
+permissions = system

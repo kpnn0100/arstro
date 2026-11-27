@@ -1,0 +1,80 @@
+@startuml
+' arstro-shell — every public type has a box (arstro.rule §3.1).
+skinparam shadowing false
+package core {
+  class Model { apps; tasks; nav; focusedTask; shadeOpen; gesture; settings; notifications; lastError }
+  class AppInfo
+  class Task
+  class GestureModel
+  class Notification
+  class Command
+  class Event
+  class CommandSpec
+  class EventSpec
+  class SettingSpec
+  class Navigator { feed(TouchSample): Feed }
+  class TouchSample
+  class ShellService { dispatch(Command); run(line); model(); dump(); lastTouch() }
+  class AppRegistry <<functions>> { parseManifest; scanApps; defaultAppRoots }
+  ShellService *-- Model
+  ShellService *-- Navigator
+  Model *-- AppInfo
+  Model *-- Task
+  Model *-- GestureModel
+  Model *-- Notification
+  ShellService ..> Command
+  ShellService ..> Event
+}
+package protocol {
+  class Wire <<messages>> { Hello; Configure; BufferInfo; FrameDone; TouchEvent; Lifecycle; BackResult }
+  class Channel { send; pump }
+  class Message
+}
+package kit {
+  class Theme <<tokens>>
+  class Draw <<functions>>
+  class Pressable
+  class Tile
+  class TouchSlider
+  class ListRow
+  class TouchScroll
+  class IconButton
+  class TextButton
+  Tile --|> Pressable
+  ListRow --|> Pressable
+  IconButton --|> Pressable
+  TextButton --|> Pressable
+}
+package sdk {
+  class App <<interface>> { create; root; layout; back; paused; resumed; shellEvent }
+  class Context { width; height; scale; insets; accent; invalidate; request; notify; finish }
+  App ..> Context
+}
+package host {
+  class Scene { advance(Model, dt); cards(); home(); shade(); zoom(); recentsTouch() }
+  class CardPose
+  class HomeView
+  class AppIcon
+  class StatusBarView
+  class ShadeView
+  class NotificationList
+  class BusyClock
+  class Layer
+  class ShellHost { frame; touch; runLine; presented }
+  class HostOptions
+  ShellHost *-- ShellService
+  ShellHost *-- Scene
+  ShellHost *-- HomeView
+  ShellHost *-- StatusBarView
+  ShellHost *-- ShadeView
+  ShellHost *-- Layer
+  ShellHost ..> Channel
+  Scene *-- CardPose
+  HomeView *-- AppIcon
+  ShadeView *-- NotificationList
+  AppIcon --|> Pressable
+}
+sdk ..> protocol
+sdk ..> kit
+host ..> kit
+@enduml

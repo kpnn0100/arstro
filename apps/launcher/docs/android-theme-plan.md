@@ -1,5 +1,13 @@
 # Android Theme for Linux — Implementation Plan
 
+> **⚠️ SUPERSEDED (2026-11-27).** This plan — an Android-style shell as a guest on GNOME and Plasma —
+> is **withdrawn**. The founder: *"this will replace gnome/plasma version"*, *"only arstro app"*.
+> The launcher is now the touch stack in [`../shell/`](../shell/): requirements
+> [`../shell/REQUIREMENTS.md`](../shell/REQUIREMENTS.md) (see *Withdrawn* for the post-mortem),
+> ledger [`../shell/docs/PROGRESS.md`](../shell/docs/PROGRESS.md). Nothing below is in force; it is
+> kept as the record of what was tried.
+
+
 Goal: recreate the **Android 17 phone shell** (launcher, status bar, quick settings,
 notification panel, gesture navigation) as a **touch-friendly shell for Ubuntu and Fedora**,
 on both **GNOME** and **KDE Plasma**, rendered with **Artboard** (Cairo/GTK host).

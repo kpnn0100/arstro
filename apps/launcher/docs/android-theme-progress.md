@@ -1,5 +1,13 @@
 # Android Theme — Progress Ledger
 
+> **⚠️ SUPERSEDED (2026-11-27).** This plan — an Android-style shell as a guest on GNOME and Plasma —
+> is **withdrawn**. The founder: *"this will replace gnome/plasma version"*, *"only arstro app"*.
+> The launcher is now the touch stack in [`../shell/`](../shell/): requirements
+> [`../shell/REQUIREMENTS.md`](../shell/REQUIREMENTS.md) (see *Withdrawn* for the post-mortem),
+> ledger [`../shell/docs/PROGRESS.md`](../shell/docs/PROGRESS.md). Nothing below is in force; it is
+> kept as the record of what was tried.
+
+
 **This file is the single source of truth for what is done and what to do next.** It is committed
 to git and travels between computers. The `/arstro.launcher.implement` skill reads the **NEXT** line
 below, does that one task, updates this file, and commits — then repeats until §"Whole-project
