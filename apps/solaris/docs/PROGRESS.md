@@ -64,7 +64,7 @@ line; runs beside it.
 - `[ ]` The melody and sound-design skills are written for a developer running the lab servers;
   each needs an "inside Solaris" section before an in-app agent is given them.
 
-**► K3** — the user judges songs-002 (future bass on the analog synth) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► K5** — the user judges drops-001 (five bare drops: their kick, a snare, a saw and a bass each) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -1058,7 +1058,14 @@ good UI UX, physical base (math base) and follow music industrial standard / lea
       scripts/lab.py. songs-002 in the Sound Lab: Hold the Sky (E minor, 150) and Wildfire Hearts (D major, 140).
       Measured on Hold the Sky: the drop 5.3 LU over the verse, the kick's hit 7.1 dB over the mix, the kick ducking
       the sub 8.2 dB, peak −0.7 dBFS. The lab's timeline names a song's sections.
-- [ ] **K3** The user's verdicts on songs-002 → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
+- [x] **K3** The user's verdicts on songs-002 → taste.md.
+      — "still not good, your bass design is worst … currently the kick is not punchy enough"; and the drop's shape,
+      set by the user: a trap kick (their own sample pack) and snare, a straight saw with no glide that strikes with
+      the kick and stops at the snare, five options to judge the bass and the saw. Lessons 10, 11.
+- [x] **K4** drops-001: scripts/drops.py — the bare drop (the Sampler playing the user's `kick_trap`, a tight snare
+      and clap, one saw bus, one bass; Em · C · G · D), five saw × bass designs, levelled; the kick's hit 8.3–8.5 dB
+      over the mix, the saw and bass stopped at the snare (measured). The lab lists batches newest last.
+- [ ] **K5** The user's verdicts on drops-001 → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

@@ -29,7 +29,9 @@ META = {"title": "Melody Lab", "subtitle": "arstro.solaris.compose.melody — yo
 
 
 def batches(lab):
-    return sorted(d for d in os.listdir(lab) if SAFE.match(d) and os.path.isfile(os.path.join(lab, d, "batch.json")))
+    # oldest first, the newest last — the page opens on the last (a name's alphabet said nothing about which is new)
+    found = [d for d in os.listdir(lab) if SAFE.match(d) and os.path.isfile(os.path.join(lab, d, "batch.json"))]
+    return sorted(found, key=lambda d: (os.path.getmtime(os.path.join(lab, d, "batch.json")), d))
 
 
 def latest_verdicts(batch):

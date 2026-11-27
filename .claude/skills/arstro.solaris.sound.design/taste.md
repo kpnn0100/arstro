@@ -29,16 +29,40 @@ changes a patch (`scripts/futurebass.py` and `references/analog-patches.md`, tog
    the synth itself (free-running unison, an octave stack, an open ladder), not by boosts.
 7. **The kick punches; the bass is hard.** *"kick is not punchy enough, need some hard bass"*.
 8. **The drop's melody rests, and something answers it.** *"need some rest note and counter melody"*.
+10. **Start from the bare drop.** songs-002 (the first songs on the analog synth): *"still not good, your bass design
+   is worst"*, *"currently the kick is not punchy enough"* (2026-11-27). The user then set the drop's shape themselves:
+   a trap kick and snare — a READY-MADE kick sample first — and one saw: *"don't do gliding, just straight powerful saw
+   play the chord that end when the snare come and play along the kick"*. So: no pitch envelope, no glide, no decay on
+   the saw; it strikes with every kick, holds flat, and stops dead at the snare; the bass does the same. Build back up
+   from there only on their word. *(scripts/drops.py)*
+11. **The kick is a sample, and it is loud.** The user's pack (26 kicks, kept outside the repository); `kick_trap` is
+   the punchiest by measure (159 ms body, 14 dB crest). At −13 LUFS its hit stood 4.8 dB over the mix; at −10, 8.4 dB.
 9. *My own reading, awaiting a verdict:* the earlier batches sat an octave too high; the registers are lower now.
 
 ## Batches
+
+### drops-001 (2026-11-27) — the bare drop: five saws, five basses
+
+One piece of music for all five (E minor, 150 bpm half time, Em · C · G · D, 16 bars; the user's `kick_trap` sample;
+a tight snare and clap on 3), so only the saw and the bass differ:
+1. **Classic** — the JP-8000 supersaw (7 + 7 an octave up); a pure sine sub.
+2. **808** — a wider, brighter supersaw; an 808 (a 5-semitone thump, driven, no glide).
+3. **Stack** — three octaves of saw (body, chord, air); a saw over a sine through the ladder, driven 12 dB.
+4. **Tight** — five saws close together with a square under them; a hollow square bass over a sine.
+5. **Driven** — the supersaw pushed 10 dB into the ladder; a sine driven 20 dB and clipped.
+
+Measured, the same in every option: kick −10, saw −14.5, bass −16, snare −16.5 LUFS alone; the kick's hit 8.3–8.5 dB
+over the mix; the saw 31–35 dB down within the gap after the snare (only its short room), the bass silent; true peak
+−1.5 dBTP. *Awaiting verdicts.*
 
 ### songs-002 (2026-11-27) — the first songs on the analog synth
 
 Hold the Sky (E minor, 150 — emotional and wide, Illenium-like) and Wildfire Hearts (D major, 140 — bright, staccato,
 Garrix's pop side). Every synth part is the analog synth: a 14-voice free-running supersaw with a lead on its top
 note, a sine sub from phase zero, a driven ladder mid bass, a two-saw reese that breathes, a pad, a pluck and lead or
-a vocal chop, an arp in the second drop. Levels set by measurement. *Awaiting verdicts.*
+a vocal chop, an arp in the second drop. Levels set by measurement.
+verdict (chat): *"still not good, your bass design is worst … currently the kick is not punchy enough"* → lessons
+10 and 11, drops-001.
 
 ### songs-001 (2026-11-27) — five songs on the Basic Synth — rejected
 

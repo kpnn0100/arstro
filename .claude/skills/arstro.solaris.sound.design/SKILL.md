@@ -64,6 +64,7 @@ If the environment variable `SOLARIS_CONTROL` is set, you are the user's agent i
 |---|---|
 | `futurebass.py --check` | the writing, checked before rendering: chord tones on strong notes, registers, surprise, hook/counter collisions |
 | `futurebass.py --out ~/Music/Solaris/sound-lab/songs-NNN [--songs a,b] [--stems] [--quick]` | each song in `SONGS` (intro, verse, build, drop, break, build, bigger drop, outro): writes the solaris-cc script, renders, LEVELS (every element measured alone, its fader set to `TARGETS`, rendered again), and measures into `batch.json`. The song and every element alone as MP3. Slow: the analog synth runs hundreds of oscillators at twice the rate — allow minutes a song |
+| `drops.py --out ~/Music/Solaris/sound-lab/drops-NNN --kick <kick.wav> [--only 1,3]` | **the bare drop**, to judge the SAW and the BASS alone: one piece of music (Em · C · G · D, 16 bars, half time), a kick SAMPLE (the Sampler, one-shot), a trap snare, a saw that strikes its chord with every kick, holds flat and stops at the snare, a bass with it — and `OPTIONS`, five saw and bass designs. Levelled to `TARGETS`; every element alone for the lab. Seconds an option. Start here before a whole song (taste.md lesson 10) |
 | `lab.py [--port 8788]` | the Sound Lab: the melody skill's lab server on `~/Music/Solaris/sound-lab`, verdicts into THIS skill's `data/judgments.jsonl`. A card a song: sections on a timeline (click to jump), the song or any element alone, the recipes, the measures, five verdicts and a note |
 
 A new song is a `SONGS` entry (key, tempo, chords, melodies written in order, a small design). A new genre is a new
@@ -82,6 +83,10 @@ script beside `futurebass.py`.
 6. Commit the ledger, the data and the patches (named files only).
 
 ## 5. Failure modes already paid for
+
+- **A whole song before its two sounds were right**: songs-002 was 2:25 of arrangement around a bass the user called
+  the worst and a kick that did not punch. Get the kick, the bass and the saw approved bare (`drops.py`) first.
+- **A synthesized kick when a good sample exists**: use the user's kick pack (ask where it is; never commit it).
 
 - **Polishing a weak instrument** (a month, three batches, verdicts stuck at "okay").
 - **An octave too high**: thin and piercing; no patch fixes a wrong register.
