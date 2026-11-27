@@ -285,6 +285,37 @@ PLUCKS = {
                     osc2__width=0.25, osc2__octave=0, osc2__level=0.5, filter__cutoff=700, filter__res=0.38,
                     filter__env=3.8, fenv__decay=130, amp__decay=260)),
 }
+# CLEAN AND THICK plucks (the user on drops-006: "not this kind of pluck, should be clean and thick pluck"): no
+# resonance, no drive, the filter barely moving — the thickness is unison, octaves and a body under the note, and the
+# pluck is the AMP envelope falling, not a filter flicking.
+_THICK = dict(osc1__wave="saw", osc1__unison=7, osc1__detune=0.3, osc1__blend=0.7, osc1__spread=0.9, osc1__level=0.8,
+              osc2__wave="saw", osc2__unison=7, osc2__detune=0.3, osc2__blend=0.7, osc2__spread=0.9, osc2__octave=1,
+              osc2__level=0.4, filter__mode='"lowpass 12"', filter__cutoff=3800, filter__res=0, filter__env=1.4,
+              filter__keytrack=0.6, fenv__attack=0, fenv__decay=260, fenv__sustain=0, fenv__release=200, amp__attack=1,
+              amp__decay=480, amp__sustain=0, amp__release=300, voice__mode="poly", voice__glide=0, voice__drift=0.1,
+              velocity=0.3, volume=-4)
+THICK = ["supersaw", "body", "round", "deep", "open"]
+PLUCKS.update({
+    "supersaw": ("Supersaw pluck — seven saws and seven more an octave up, a gentle 12 dB low-pass at 3.8 kHz that "
+                 "closes a little as the note falls away over half a second", _THICK),
+    "body": ("Saw and sine — five saws with a sine at the same pitch inside them and a sine an octave below: the sines "
+             "are the weight, the saws the edge; falls away in 0.45 s",
+             dict(_THICK, osc1__unison=5, osc1__detune=0.24, osc2__wave="sine", osc2__unison=1, osc2__octave=0,
+                  osc2__level=0.6, sub__level=0.45, sub__wave="sine", sub__octave=-1, filter__cutoff=3000,
+                  amp__decay=450)),
+    "round": ("Round — three triangles under five saws an octave up, the low-pass at 2.6 kHz: soft-edged and full, "
+              "the cleanest of the five",
+              dict(_THICK, osc1__wave="triangle", osc1__unison=3, osc1__detune=0.14, osc1__level=0.9, osc2__unison=5,
+                   osc2__detune=0.22, osc2__level=0.3, filter__cutoff=2600, filter__env=1.0, amp__decay=520)),
+    "deep": ("Deep — seven saws with three saws an octave BELOW them, and a short tail that keeps ringing quietly: "
+             "the thickest",
+             dict(_THICK, osc2__octave=-1, osc2__unison=3, osc2__detune=0.18, osc2__spread=0.4, osc2__level=0.55,
+                  filter__cutoff=3200, amp__decay=560, amp__sustain=0.12, amp__release=380)),
+    "open": ("Open — saws at the note and an octave up with a sine below, the filter off: nothing shaped but the "
+             "level falling in 0.38 s; the brightest",
+             dict(_THICK, osc2__level=0.5, sub__level=0.4, sub__wave="sine", sub__octave=-1, filter__mode="off",
+                  filter__env=0, amp__decay=380)),
+})
 # CALL AND RESPONSE: the loved lead (LEADS[0], the Glass stack) and a pluck share the melody. Written as two lines over
 # the same four units; "r" rests; each unit is 8 beats (two bars: kick 1, 4, 6 — snare 3, 7).
 CALLS = [
@@ -491,9 +522,9 @@ def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None, m
         S.set(pdv, **patch)
         pn = melody_notes(pluck)
         S.notes(ppt, [(p, t, max(0.1, d - 0.05), 118 if abs(t - round(t)) < 1e-6 else 100) for t, d, p in pn])
-        S.device(pch, "eq", lowcut__on="on", lowcut__freq=250, highshelf__freq=6000, highshelf__gain=2)
+        S.device(pch, "eq", lowcut__on="on", lowcut__freq=160 if pluck["sound"] in THICK else 250, highshelf__freq=6000, highshelf__gain=0 if pluck["sound"] in THICK else 2)
         S.device(pch, "imager", width=130)
-        S.device(pch, "delay", time=num(0.75 * 60000 / BPM), feedback=0.38, tone=5000, mix=0.24)
+        S.device(pch, "delay", time=num(0.75 * 60000 / BPM), feedback=0.3 if pluck["sound"] in THICK else 0.38, tone=5000, mix=0.16 if pluck["sound"] in THICK else 0.24)
         S.device(pch, "reverb", decay=2000, size=110, mix=0.2, lowcut=500, highcut=11000, width=1)
         line(f"strip duck {pch} --under {kick} --amount 3")
         S.set(S.new('dv'), release=90)
@@ -520,6 +551,7 @@ def main():
     ap.add_argument("--melody", action="store_true", help="the MELODIES: a lead over the moods the user loved")
     ap.add_argument("--leads", action="store_true", help="the LEADS: five lead SOUNDS on one melody and mood")
     ap.add_argument("--calls", action="store_true", help="CALLS: call and response between the loved lead and a pluck")
+    ap.add_argument("--plucks", action="store_true", help="THICK: five clean, thick pluck sounds on the first of CALLS")
     ap.add_argument("--design", default="808", help="with --moods / --melody: which of OPTIONS plays them")
     a = ap.parse_args()
     out = os.path.abspath(os.path.expanduser(a.out))
@@ -539,12 +571,14 @@ def main():
     seconds = round((4 * BARS + 8) * 60 / BPM)
     design = next(o for o in OPTIONS if o["name"].lower() == a.design.lower())
     by = {m["name"]: m for m in MOODS}
-    runs = ([(by[c["mood"]], design, call_lines(c)[0], LEADS[0], dict(call_lines(c)[1], sound=c["sound"])) for c in CALLS]
-            if a.calls else [(by[MELODIES[0]["mood"]], design, MELODIES[0], ld, None) for ld in LEADS] if a.leads else
+    c0 = CALLS[0]
+    runs = ([(by[c0["mood"]], design, call_lines(c0)[0], LEADS[0], dict(call_lines(c0)[1], sound=x)) for x in THICK]
+            if a.plucks else [(by[c["mood"]], design, call_lines(c)[0], LEADS[0], dict(call_lines(c)[1], sound=c["sound"])) for c in CALLS]
+             if a.calls else [(by[MELODIES[0]["mood"]], design, MELODIES[0], ld, None) for ld in LEADS] if a.leads else
             [(by[x["mood"]], design, x, None, None) for x in MELODIES] if a.melody else
             [(m, design, None, None, None) for m in MOODS] if a.moods else [(None, o, None, None, None) for o in OPTIONS])
     for k, (mood, opt, mel, ld, pl) in enumerate(runs, 1):
-        sid = f"call-{k}" if pl else f"lead-{k}" if ld else f"melody-{k}" if mel else (f"mood-{k}" if mood else f"drop-{k}")
+        sid = f"pluck-{k}" if a.plucks else f"call-{k}" if pl else f"lead-{k}" if ld else f"melody-{k}" if mel else (f"mood-{k}" if mood else f"drop-{k}")
         if only and str(k) not in only:
             if sid in old:
                 items.append(old[sid])
@@ -572,7 +606,7 @@ def main():
             if attempt == 1:
                 trim = {n: max(-18, min(12, round(TARGETS[n] - v, 1))) for n, v in lufs.items() if v is not None and v > -60}
         failed += not ok
-        title = (f"Call {k} — {mel['shape']}, over {mood['name']}: {mel['how']}" if pl else f"Lead {k} — {ld['name']}: {ld['source']}" if ld else f"Melody {k} — {mel['shape']}, over {mood['name']} ({mood['chords']})" if mel else
+        title = (f"Pluck {k} — {PLUCKS[pl['sound']][0].split(' — ')[0]}" if a.plucks else f"Call {k} — {mel['shape']}, over {mood['name']}: {mel['how']}" if pl else f"Lead {k} — {ld['name']}: {ld['source']}" if ld else f"Melody {k} — {mel['shape']}, over {mood['name']} ({mood['chords']})" if mel else
                  f"Mood {k} — {mood['name']}: {mood['chords']}" if mood else f"Drop {k} — {opt['name']}: {opt['about']}")
         item = {"id": sid, "title": title, "sound": True, "section": "drop",
                 "style": "future-bass", "style_label": "Future bass drop — kick, snare, saw, bass", "bpm": BPM,

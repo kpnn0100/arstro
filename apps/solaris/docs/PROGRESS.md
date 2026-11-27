@@ -64,7 +64,7 @@ line; runs beside it.
 - `[ ]` The melody and sound-design skills are written for a developer running the lab servers;
   each needs an "inside Solaris" section before an in-app agent is given them.
 
-**► K15** — the user judges drops-006 (call and response between the loved Glass stack lead and a pluck, five writings) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► K17** — the user judges drops-007 (five clean, thick plucks answering the Glass stack lead) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -1087,7 +1087,10 @@ good UI UX, physical base (math base) and follow music industrial standard / lea
       advance, a call and response using pluck and lead".
 - [x] **K14** drops-006: `drops.py --calls` — an analog pluck (`PLUCKS`) and five call-and-response writings (`CALLS`)
       with the Glass stack; both lines checked against the chords, levelled (lead −14.5, pluck −17 LUFS).
-- [ ] **K15** The user's verdicts on drops-006 → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
+- [x] **K15** The user's verdict on drops-006 (chat) → taste.md lesson 18: "not this kind of pluck, should be clean
+      and thick pluck". The five writings remain unjudged.
+- [x] **K16** drops-007: `drops.py --plucks` — five clean, thick plucks (`THICK`) on one call and response, levelled.
+- [ ] **K17** The user's verdicts on drops-007 → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

@@ -60,9 +60,20 @@ changes a patch (`scripts/futurebass.py` and `references/analog-patches.md`, tog
 17. **The Glass stack is the lead; the melody is shared with a pluck.** drops-005: Lead 1 **love** — *"love the 1, now
    make it more advance, a call and response using pluck and lead"*. The lead is the stacked saw-and-pulse one with a
    filter that opens at each note (`LEADS[0]`); a second, struck voice answers it. *(drops.py `CALLS`, `--calls`)*
+18. **The pluck is clean and thick.** drops-006 (a pluck made by a resonant filter flicking open): *"not this kind of
+   pluck, should be clean and thick pluck"*. No resonance, no drive, the filter nearly still; thickness from unison,
+   octaves and a sine or saws under the note; the pluck is the amp envelope falling. *(drops.py `THICK`, `--plucks`)*
 9. *My own reading, awaiting a verdict:* the earlier batches sat an octave too high; the registers are lower now.
 
 ## Batches
+
+### drops-007 (2026-11-27) — one call and response, five clean, thick plucks
+
+"Question and answer" over Longing, the Glass stack lead; only the pluck differs (−17 LUFS alone, low cut 160 Hz, a
+quieter echo): 1 **Supersaw** (7 saws + 7 an octave up, a 12 dB low-pass at 3.8 kHz) · 2 **Saw and sine** (5 saws, a
+sine inside and one an octave below) · 3 **Round** (triangles under saws an octave up) · 4 **Deep** (saws with saws an
+octave below, a short ringing tail) · 5 **Open** (saws, an octave, a sine below, the filter off).
+*Awaiting verdicts.*
 
 ### drops-006 (2026-11-27) — call and response: the Glass stack and a pluck
 
@@ -74,7 +85,8 @@ the line; lead −14.5, pluck −17 LUFS alone:
 4. **Trading** (Dreamy, the pulse pluck) — two beats each, four turns a unit; both reach E♭ over the Cm6.
 5. **Apart, then together** (Longing) — two units of answer, then both play the climb to E6 as one sound.
 Measured: 88–100 % of each voice's strong notes in the chord; the voices overlap only at hand-overs (and in 5's unison).
-*Awaiting verdicts.*
+No marks on the page; in chat: "not this kind of pluck, should be clean and thick pluck" → lesson 18, drops-007. The
+five WRITINGS are still unjudged.
 
 ### drops-005 (2026-11-27) — one melody, five lead SOUNDS
 
