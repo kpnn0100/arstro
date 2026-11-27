@@ -53,9 +53,26 @@ changes a patch (`scripts/futurebass.py` and `references/analog-patches.md`, tog
    CHORD saw's, not the lead's. *(the lead: legato, an 80 ms glide, a late vibrato; melodies built on a reach, a sigh,
    the ♭6 → 5, a leading tone left hanging — and allowed to measure more "surprising" than the melody skill's gate,
    because a reach is a leap)*
+16. **The lead's SOUND must be its own.** On drops-004 (a three-saw lead that slides): *"the lead is too simple, future
+   bass need some unique lead, learn online"*. A plain saw with a glide is not a lead in this genre: it needs layers
+   (pulse, octave, noise), a filter that moves at each note, a wobble or a voice, or a second instrument on the attack.
+   *(drops.py `LEADS`, `--leads`; references/research.md ## The lead)*
 9. *My own reading, awaiting a verdict:* the earlier batches sat an octave too high; the registers are lower now.
 
 ## Batches
+
+### drops-005 (2026-11-27) — one melody, five lead SOUNDS
+
+Longing with "the cry", the 808 design, the sparse pattern — only the lead's sound differs (all at −14.5 LUFS alone):
+1. **Glass stack** — 7 saws + 3 pulses + noise, 5 pulses an octave up; a ladder at 2.4 kHz opened 2 octaves by an
+   envelope at each note, fluttered at a 32nd note; slides 140 ms. (centroid 2.1 kHz — the brightest)
+2. **Seasick** — saws an octave down under saws, a square sub, a 110 ms swell, a 1.1 Hz LFO bending the tuning ±0.3 st,
+   a 220 ms slide, a chorus. (1.35 kHz, 19 % below 400 Hz — the widest and lowest)
+3. **Voice** — saws and a pulse through the vowel filter, AH on held notes, EE / OH on quick ones. (0.8 kHz)
+4. **Bite** — two saws 16 cents apart, the ladder at 950 Hz snapped by a 200 ms envelope, clipped hard after it, a
+   phaser, a quarter-note echo. (crest 12.7 dB — the densest)
+5. **Bell & air** — an FM bell an octave up striking each note over soft sliding saws and a sine below.
+*Awaiting verdicts.*
 
 ### drops-004 (2026-11-27) — a lead with portamento, five melodies built on feeling
 
@@ -65,7 +82,8 @@ has a late vibrato. 1 **the cry** (Longing): a climb, then a leap to a note held
 the bass, each phrase a third higher · 4 **the reach** (Falling): one long low note, a slide up a fifth, a sixth, a
 minor sixth · 5 **the ache** (Dreamy): the line reaches E♭ over the borrowed Cm6 and holds it.
 Measured: 80–100 % of strong notes in the chord; 3.49–3.85 bits a note — over the 3.25 gate, knowingly (lesson 15).
-*Awaiting verdicts.*
+No marks on the page; in chat: "the lead is too simple, future bass need some unique lead, learn online" → lesson 16,
+drops-005.
 
 ### drops-003 (2026-11-27) — a melody over the loved moods
 

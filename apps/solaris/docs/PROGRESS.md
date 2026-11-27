@@ -64,7 +64,7 @@ line; runs beside it.
 - `[ ]` The melody and sound-design skills are written for a developer running the lab servers;
   each needs an "inside Solaris" section before an in-app agent is given them.
 
-**► K11** — the user judges drops-004 (a sliding lead, five more emotional melodies over the moods they loved) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► K13** — the user judges drops-005 (one melody, five lead SOUNDS: Glass stack, Seasick, Voice, Bite, Bell & air) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -1079,7 +1079,11 @@ good UI UX, physical base (math base) and follow music industrial standard / lea
       that is more emotion" (lesson 15).
 - [x] **K10** drops-004: the lead legato with an 80 ms glide and a late vibrato (the slide measured in the stem); five
       new melodies — the cry, sighs, tears, the reach, the ache.
-- [ ] **K11** The user's verdicts on drops-004 → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
+- [x] **K11** The user's verdict on drops-004 (chat) → taste.md lesson 16: "the lead is too simple, future bass need
+      some unique lead, learn online".
+- [x] **K12** drops-005: `drops.py --leads` — five lead sounds learned from published lead breakdowns (research.md
+      ## The lead), layers on a Lead bus, levelled to −14.5 LUFS; one melody and mood so only the sound differs.
+- [ ] **K13** The user's verdicts on drops-005 → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

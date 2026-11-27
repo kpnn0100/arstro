@@ -18,6 +18,18 @@
 | Loopmasters, "How to make a future bass drop" (https://www.loopmasters.com/articles/4372-How-To-Make-A-Future-Bass-Drop-A-Future-Bass-Production-Tutorial) | two detuned saw stacks an octave apart with a quick pitch envelope up at each note; chords and bass ducked by kick AND snare; fills after the snare; riser, cut, impact |
 | musicproductionwiki, "How to recreate future bass chords" (https://musicproductionwiki.com/articles/how-to-recreate-future-bass-chords — its numbers marked unverified there) | a supersaw of 7–12 voices at moderate detune; chords high-passed at 150–200 Hz; a cut around 150 Hz; the pump timed to the beat |
 
+## The lead
+
+| source | what it gave |
+|---|---|
+| Production Music Live, a Flume-style lead rebuilt in Sylenth1 (https://www.productionmusiclive.com — "Tennis Court"-style lead walkthrough) | the lead is a STACK: a detuned saw (8 voices), a pulse (3 voices), a pulse an octave up (4 voices, low), up to 5 % noise; each pair through a 24 dB low-pass; an LFO at 1/32 gently on the cutoff; an envelope on the cutoff |
+| synthctrl, a Flume-style wobbling lead | a saw an octave down (3 voices) + a saw (4 voices) + a square sub; attack ~120 ms, decay ~690 ms, sustain −2.6 dB, release ~900 ms; an LFO at 1.1 Hz on tuning; portamento ~220 ms, always on — "the most important part" |
+| Attack Magazine, a Don Diablo-style detuned lead | mono legato saws; a low-pass at 400 Hz with a 200 ms envelope; a pitch LFO near 6.5 Hz; a hard clip AFTER the filter to restore harmonics; a phaser, a quarter-note delay, a widener; lows cut, highs lifted |
+| Sample Focus, future bass lead guide | glide 100–250 ms, legato; attack 20–50 ms soft or 1–10 ms punchy; reverb 2–4 s at 10–25 %; delay 1/8 or 1/16; cut under 100 Hz, lift 1–5 kHz; layer a saw with a sine or a pluck |
+
+These are techniques, rebuilt on the analog synth as `drops.py` `LEADS`; no artist's patch, melody or sample is copied.
+(The exact article URLs were read through search results and a fetch agent; Splice's page refused the fetch.)
+
 **Honest limits.** No interview or session breakdown from Illenium, San Holo or Martin Garrix was found; their style
 is described here as habits of the genre (a quiet verse on piano or guitar, a drop whose lead is its chords, long
 soaring notes or short syncopated stabs), and no melody, progression or sound of theirs is reproduced. The Szabo

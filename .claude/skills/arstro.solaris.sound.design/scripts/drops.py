@@ -183,6 +183,93 @@ LEAD = dict(osc1__wave="saw", osc1__unison=3, osc1__detune=0.18, osc1__blend=0.5
             lfo__fade=280, lfo__pitch=0.14)
 
 
+_SLIDE = dict(voice__mode="legato", voice__drift=0.1, amp__attack=12, amp__release=60)
+_BELL = dict(algorithm=5, feedback=0, op1__ratio=1, op1__fine=0, op1__level=1, op1__attack=1, op1__decay=1100,
+             op1__sustain=0, op1__release=700, op2__ratio=4, op2__level=0.16, op2__attack=1, op2__decay=180,
+             op2__sustain=0, op2__release=150, op3__ratio=4, op3__fine=0, op3__level=0.1, op3__attack=1, op3__decay=500,
+             op3__sustain=0, op3__release=400, op4__ratio=1, op4__level=0, volume=-9)
+# Five LEAD designs, learned from how future bass leads are built (references/research.md ## The lead). Each is layers
+# (instrument, name, semitone shift, patch, "slide" — one legato voice, tied notes overlap — or "strike" — every note
+# struck) on one Lead bus, the bus's own effects, then an echo and a room shared by all five.
+LEADS = [
+    dict(name="Glass stack", source="the stacked lead of Flume-style tracks: a detuned saw, pulses beside it and an octave up, "
+         "a breath of noise, each through a 24 dB low-pass that an envelope opens and a fast LFO flutters",
+         layers=[("analog", "body", 0, dict(_SLIDE, osc1__wave="saw", osc1__unison=7, osc1__detune=0.3, osc1__blend=0.6,
+                                            osc1__spread=0.7, osc1__level=0.8, osc2__wave="pulse", osc2__width=0.35,
+                                            osc2__unison=3, osc2__detune=0.2, osc2__spread=0.5, osc2__level=0.45,
+                                            sub__noise=0.05, filter__mode='"lowpass 24"', filter__cutoff=2400,
+                                            filter__res=0.22, filter__env=2.2, filter__keytrack=0.5, fenv__attack=4,
+                                            fenv__decay=420, fenv__sustain=0.45, fenv__release=200, lfo__shape="sine",
+                                            lfo__sync='"1/32"', lfo__cutoff=0.22, lfo__width=0.12, voice__mode="mono",
+                                            voice__glide=140, volume=-10), "slide"),
+                 ("analog", "octave", 12, dict(_SLIDE, osc1__wave="pulse", osc1__width=0.3, osc1__unison=5, osc1__detune=0.25,
+                                               osc1__blend=0.6, osc1__spread=0.9, osc1__level=0.8, osc2__level=0,
+                                               filter__mode='"lowpass 24"', filter__cutoff=3200, filter__res=0.15,
+                                               filter__env=1.5, fenv__attack=4, fenv__decay=300, fenv__sustain=0.4,
+                                               voice__mode="mono", voice__glide=140, volume=-19), "slide")],
+         fx=[],
+         recipe="a 7-voice saw with a 3-voice pulse beside it and a breath of noise, and a 5-voice pulse an octave up, "
+                "quiet; a 24 dB ladder low at 2.4 kHz that an envelope opens 2 octaves at every note and lets fall in "
+                "0.4 s, fluttered by an LFO at a 32nd note; it slides 140 ms"),
+    dict(name="Seasick", source="the wobbling lead of Flume-style tracks: a saw an octave down under a saw, a square sub, a "
+         "slow attack, a slow LFO bending the tuning, and a long portamento — 'the most important part'",
+         layers=[("analog", "wobble", 0, dict(_SLIDE, osc1__wave="saw", osc1__octave=-1, osc1__unison=3, osc1__detune=0.25,
+                                              osc1__blend=0.6, osc1__spread=0.5, osc1__level=0.7, osc2__wave="saw",
+                                              osc2__unison=5, osc2__detune=0.32, osc2__blend=0.7, osc2__spread=0.9,
+                                              osc2__level=0.8, sub__level=0.25, sub__wave="square", sub__octave=-1,
+                                              filter__mode='"lowpass 24"', filter__cutoff=5200, filter__res=0.1,
+                                              filter__keytrack=0.4, amp__attack=110, amp__decay=690, amp__sustain=0.74,
+                                              amp__release=500, lfo__shape="sine", lfo__rate=1.1, lfo__pitch=0.3,
+                                              voice__glide=220, voice__drift=0.3, volume=-10), "slide")],
+         fx=[("chorus", {})],
+         recipe="three saws an octave down under five saws, a square sub; it swells in over 110 ms and settles; an LFO "
+                "at 1.1 Hz bends the tuning ±0.3 semitone the whole time (the seasick wobble); it slides 220 ms to "
+                "every next note; a chorus"),
+    dict(name="Voice", source="the vocal-chop lead future bass is known for, made by a formant filter instead of a sample "
+         "(and the user has rated the vocal chop good twice)",
+         layers=[("analog", "voice", 0, dict(_SLIDE, osc1__wave="saw", osc1__unison=3, osc1__detune=0.12, osc1__blend=0.4,
+                                             osc1__spread=0.4, osc1__level=0.8, osc2__wave="pulse", osc2__width=0.3,
+                                             osc2__level=0.4, sub__noise=0.03, filter__mode='"lowpass 24"',
+                                             filter__cutoff=7000, filter__res=0.05, amp__attack=25, amp__release=120,
+                                             lfo__shape="sine", lfo__rate=5.6, lfo__fade=220, lfo__pitch=0.22,
+                                             voice__glide=90, volume=-10), "slide")],
+         fx=[("vowel", dict(resonance=1.0, glide=45, mix=1, output=8))], vowel=True,
+         recipe="three saws and a pulse through the vowel filter: held notes open to AH, quick ones alternate EE and OH, "
+                "and the mouth takes 45 ms to move; it slides 90 ms, with a late, deeper vibrato — it sings the line"),
+    dict(name="Bite", source="the detuned mono lead of future house and bass (Don Diablo style): two saws a few cents apart, "
+         "a low-pass closed low with a short envelope, a hard clip AFTER the filter to bring the harmonics back, a "
+         "phaser, a quarter-note echo",
+         layers=[("analog", "bite", 0, dict(osc1__wave="saw", osc1__level=0.8, osc1__unison=1, osc2__wave="saw",
+                                            osc2__fine=16, osc2__level=0.8, osc2__unison=1, filter__mode='"lowpass 24"',
+                                            filter__cutoff=950, filter__res=0.18, filter__env=2.4, filter__keytrack=0.6,
+                                            filter__drive=6, fenv__attack=1, fenv__decay=200, fenv__sustain=0.35,
+                                            fenv__release=120, amp__attack=3, amp__release=80, lfo__shape="sine",
+                                            lfo__rate=6.5, lfo__fade=150, lfo__pitch=0.12, voice__mode="mono",
+                                            voice__glide=110, voice__phase="free", volume=-10), "slide")],
+         fx=[("saturator", dict(drive=18, curve="hard", mix=1, output=-8)),
+             ("phaser", dict(rate=0.25, center=1400, depth=1.5, stages=4, feedback=0.3, stereo=90, mix=0.35)),
+             ("eq", dict(highshelf__freq=5000, highshelf__gain=3))], echo=1.0,
+         recipe="two saws 16 cents apart, one voice; the ladder closed to 950 Hz and snapped open by a 200 ms envelope "
+                "at every note; then clipped hard (18 dB) so it growls, a slow phaser, a quarter-note echo; it slides "
+                "110 ms and every note strikes again"),
+    dict(name="Bell & air", source="the layered lead the genre's guides describe: a bell or pluck striking each note for the "
+         "attack, a soft saw gliding under it for the body, a sine below",
+         layers=[("fm", "bell", 12, _BELL, "strike"),
+                 ("analog", "air", 0, dict(_SLIDE, osc1__wave="saw", osc1__unison=5, osc1__detune=0.22, osc1__blend=0.6,
+                                           osc1__spread=0.9, osc1__level=0.8, osc2__wave="sine", osc2__octave=-1,
+                                           osc2__level=0.45, filter__mode='"lowpass 24"', filter__cutoff=3400,
+                                           filter__res=0.08, filter__keytrack=0.5, amp__attack=45, amp__release=180,
+                                           lfo__shape="sine", lfo__rate=5.3, lfo__fade=300, lfo__pitch=0.14,
+                                           voice__glide=100, volume=-13), "slide")],
+         fx=[],
+         recipe="an FM bell (harmonic, ratio 4) an octave up striking every note, over five soft saws that swell in "
+                "45 ms and slide 100 ms, a sine an octave below; the bell gives the note, the saw carries it"),
+]
+PLAIN = dict(name="Plain", source="", layers=[("analog", "lead", 0, None, "slide")], fx=[],
+             recipe="three saws close together and a quiet octave above, one voice with PORTAMENTO (it slides to each "
+                    "next note in 80 ms), a late vibrato")
+
+
 def melody_notes(mel):
     """[(beat, length, midi)] over the 16 bars: the four units, then three of them and the last, then home."""
     out, texts = [], mel["units"] + mel["units"][:3] + [mel["last"]]
@@ -244,7 +331,7 @@ def segments():
     return out
 
 
-def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None, melody=None):
+def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None, melody=None, lead=None):
     S, E, L = Script(), [], 4 * BARS + 8
     line = S.line
     seg = seg or segments()
@@ -298,20 +385,33 @@ def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None, m
     S.set(S.new('dv'), release=70)
     E.append({"name": "Bass", "strip": bass, "recipe": opt["bass_note"] + ". With every kick, the saw's lengths, no "
               "glide; mono; ducked 14 dB by the kick and back in ~150 ms"})
-    if melody:   # the lead: three saws close together and a quiet octave, as straight as the chords; an echo, a room
-        lead, ldv, lpt = S.instrument("analog", "Lead", L)
-        S.set(ldv, volume=-10, **dict(FLAT, **LEAD))
+    if melody:   # the lead: its layers on one bus, then an echo and a room
+        lead = lead or PLAIN
+        lbus = S.bus("Lead")
         mn = melody_notes(melody)
         # a note that runs straight into the next overlaps it (so the voice slides); one before a rest ends early
         tied = [i + 1 < len(mn) and abs(mn[i + 1][0] - (t + d)) < 1e-6 for i, (t, d, p) in enumerate(mn)]
-        S.notes(lpt, [(p, t, d + 0.06 if tie else max(0.1, d - 0.06), 112) for (t, d, p), tie in zip(mn, tied)])
-        S.device(lead, "delay", time=num(0.75 * 60000 / BPM), feedback=0.3, tone=4000, mix=0.16)
-        S.device(lead, "reverb", decay=1800, size=110, mix=0.14, lowcut=400, highcut=10000, width=0.9)
-        line(f"strip duck {lead} --under {kick} --amount 4")
+        for kind, part, shift, patch, how in lead["layers"]:
+            ch, dv, pt = S.instrument(kind, f"Lead {part}", L)
+            S.set(dv, **(dict(dict(FLAT, volume=-10), **(patch or LEAD)) if kind == "analog" else patch))
+            if how == "slide":
+                S.notes(pt, [(p + shift, t, d + 0.06 if tie else max(0.1, d - 0.06), 112) for (t, d, p), tie in zip(mn, tied)])
+            else:
+                S.notes(pt, [(p + shift, t, max(0.1, d - 0.05), 104) for t, d, p in mn])
+            line(f"route {ch} --to {lbus}")
+        for fkind, fparams in lead["fx"]:
+            fdv = S.device(lbus, fkind, **fparams)
+            if fkind == "vowel":                                     # held notes AH, quick ones EE and OH in turn
+                au = S.held("Lead · Vowel", [{"t": t, "vowel": 0 if d >= 1.5 else (2 if i % 2 else 3)}
+                                             for i, (t, d, p) in enumerate(mn)], L)
+                line(f'set {fdv}.vowel="={au}"')
+        S.device(lbus, "eq", lowcut__on="on", lowcut__freq=180, peak1__freq=2800, peak1__gain=2, peak1__q=0.8)
+        S.device(lbus, "delay", time=num(lead.get("echo", 0.75) * 60000 / BPM), feedback=0.32, tone=4000, mix=0.17)
+        S.device(lbus, "reverb", decay=2400, size=120, mix=0.17, lowcut=400, highcut=10000, width=0.9)
+        line(f"strip duck {lbus} --under {kick} --amount 4")
         S.set(S.new('dv'), release=90)
-        E.append({"name": "Lead", "strip": lead, "recipe": f"the melody — {melody['shape']}: {melody['how']}. Three saws "
-                  "close together and a quiet octave above, one voice with PORTAMENTO (it slides to each next note in "
-                  "80 ms), a late vibrato; a dotted-eighth echo and a room; "
+        E.append({"name": "Lead", "strip": lbus, "recipe": f"the melody — {melody['shape']}: {melody['how']}. THE SOUND — "
+                  f"{lead['name']}: {lead['recipe']}; low cut 180 Hz, an echo, a 2.4 s room; "
                   f"{int(100 * melody_fit(melody))} % of its strong notes are in the chord under them"})
     for e in E:
         g = (trim or {}).get(e["name"], 0)
@@ -332,6 +432,7 @@ def main():
     ap.add_argument("--quick", action="store_true", help="one render, no levelling pass")
     ap.add_argument("--moods", action="store_true", help="five MOODS (chord sets) on one sound, the user's sparser pattern")
     ap.add_argument("--melody", action="store_true", help="the MELODIES: a lead over the moods the user loved")
+    ap.add_argument("--leads", action="store_true", help="the LEADS: five lead SOUNDS on one melody and mood")
     ap.add_argument("--design", default="808", help="with --moods / --melody: which of OPTIONS plays them")
     a = ap.parse_args()
     out = os.path.abspath(os.path.expanduser(a.out))
@@ -351,10 +452,11 @@ def main():
     seconds = round((4 * BARS + 8) * 60 / BPM)
     design = next(o for o in OPTIONS if o["name"].lower() == a.design.lower())
     by = {m["name"]: m for m in MOODS}
-    runs = ([(by[x["mood"]], design, x) for x in MELODIES] if a.melody else [(m, design, None) for m in MOODS] if a.moods
-            else [(None, o, None) for o in OPTIONS])
-    for k, (mood, opt, mel) in enumerate(runs, 1):
-        sid = f"melody-{k}" if mel else (f"mood-{k}" if mood else f"drop-{k}")
+    runs = ([(by[MELODIES[0]["mood"]], design, MELODIES[0], ld) for ld in LEADS] if a.leads else
+            [(by[x["mood"]], design, x, None) for x in MELODIES] if a.melody else
+            [(m, design, None, None) for m in MOODS] if a.moods else [(None, o, None, None) for o in OPTIONS])
+    for k, (mood, opt, mel, ld) in enumerate(runs, 1):
+        sid = f"lead-{k}" if ld else f"melody-{k}" if mel else (f"mood-{k}" if mood else f"drop-{k}")
         if only and str(k) not in only:
             if sid in old:
                 items.append(old[sid])
@@ -363,7 +465,7 @@ def main():
         for attempt in ((1, 2) if not a.quick else (2,)):
             if mood:
                 seg, snares = mood_segments(mood)
-                text, E = arrange(opt, kick, trim, seg, snares, "the kick on 1, 4 and 6 of every two bars (the snare on 3 and 7)", mel)
+                text, E = arrange(opt, kick, trim, seg, snares, "the kick on 1, 4 and 6 of every two bars (the snare on 3 and 7)", mel, ld)
             else:
                 text, E = arrange(opt, kick, trim)
             text = text.replace("project new drop.slp", f"project new {sid}.slp")
@@ -382,7 +484,7 @@ def main():
             if attempt == 1:
                 trim = {n: max(-18, min(18, round(TARGETS[n] - v, 1))) for n, v in lufs.items() if v is not None and v > -60}
         failed += not ok
-        title = (f"Melody {k} — {mel['shape']}, over {mood['name']} ({mood['chords']})" if mel else
+        title = (f"Lead {k} — {ld['name']}: {ld['source']}" if ld else f"Melody {k} — {mel['shape']}, over {mood['name']} ({mood['chords']})" if mel else
                  f"Mood {k} — {mood['name']}: {mood['chords']}" if mood else f"Drop {k} — {opt['name']}: {opt['about']}")
         item = {"id": sid, "title": title, "sound": True, "section": "drop",
                 "style": "future-bass", "style_label": "Future bass drop — kick, snare, saw, bass", "bpm": BPM,
