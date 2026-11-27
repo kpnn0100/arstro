@@ -67,10 +67,15 @@ changes a patch (`scripts/futurebass.py` and `references/analog-patches.md`, tog
    and need hard snare, saw stop on snare, there will be 8 bit pluck arp run with chord, heavy bass, remove wobble
    bass, use heavy lead to make emotional melody"*. No wobble or LFO bass at all; the saw's stop-at-the-snare rule
    (lesson 10) holds in this genre too. *My reading:* the count is the slow one (kick and snare each once a bar at
-   150); one option of dubstep-002 counts it fast, to be told which. *(dubstep.py)*
+   150); one option of dubstep-002 counts it fast, to be told which. Then, on dubstep-002: *"arp stop when snare"* —
+   the arp plays from the kick to the snare, like the saw (dubstep-003). *(dubstep.py)*
 9. *My own reading, awaiting a verdict:* the earlier batches sat an octave too high; the registers are lower now.
 
 ## Batches
+
+### dubstep-003 (2026-11-27) — dubstep-002 with the arp stopping at the snare
+
+The same five drops; the 8-bit arp now runs only from each kick to the snare, with the saw. *Awaiting verdicts.*
 
 ### dubstep-002 (2026-11-27) — melodic dubstep to the user's specification
 
@@ -79,7 +84,7 @@ kick to snare · an 8-bit arp (one square, 6 bits, sixteenths, C6–B6) · a hea
 LFO) · a heavy lead (the Glass stack + saws an octave below, a tube). Five melodies:
 1 **The cry** (Longing) · 2 **Sighs** (Longing) · 3 **Tears** (Falling) · 4 **The ache** (Dreamy) · 5 **The cry,
 counted fast** (the same with the drums counted at 150).
-*Awaiting verdicts.*
+No marks; in chat: "arp stop when snare" → dubstep-003.
 
 ### dubstep-001 (2026-11-27) — "try melodic dubstep": five drops
 

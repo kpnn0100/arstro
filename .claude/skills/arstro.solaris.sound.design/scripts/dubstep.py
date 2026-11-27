@@ -8,7 +8,7 @@ bass, remove wobble bass, use heavy lead to make emotional melody".
 - KICK on 1 and 3, a HARD SNARE on 2 and 4. Counted slow (75 to the minute — the genre's half time): in this
   150 bpm project a kick on beat 1 and a snare on beat 3 of every bar. One of DROPS (`fast`) counts it at 150 instead.
 - the SAW (the approved wide supersaw, the mood chords) strikes with the kick, holds flat and STOPS at the snare;
-- an 8-BIT PLUCK ARP — one square wave, crushed to 6 bits — runs the chord's notes in sixteenths, high;
+- an 8-BIT PLUCK ARP — one square wave, crushed to 6 bits — runs the chord's notes in sixteenths, high, and stops at the snare with the saw;
 - a HEAVY BASS: the 808 under a driven saw-and-square an octave over it, straight — NO wobble, no LFO at all;
 - a HEAVY LEAD (the loved Glass stack with saws an octave below and drive) plays an emotional melody (drops.py MELODIES).
 
@@ -144,7 +144,10 @@ def arrange(drop, kick_file, trim=None):
             t = 8 * u + 0.25 * i
             if pat is None and i % 4 == 1:                           # the gallop: an eighth and two sixteenths
                 continue
-            notes = [h for h in hits if h[0] <= t + 1e-9][-1][2].split()
+            h = [h for h in hits if h[0] <= t + 1e-9][-1]
+            if t >= h[0] + h[1] - 1e-9:                              # the arp stops at the snare, with the saw
+                continue
+            notes = h[2].split()
             pcs = sorted({midi(n) % 12 for n in notes[-4:]})
             tones = sorted(84 + (pc - 84) % 12 for pc in pcs)        # C6 … B6
             k = i if pat is None else pat[i % len(pat)]
@@ -158,7 +161,7 @@ def arrange(drop, kick_file, trim=None):
     S.set(S.new('dv'), release=90)
     E.append({"name": "Arp", "strip": ar, "recipe": "8-BIT: one square wave, no filter, each note gone in 140 ms, crushed to "
               f"6 bits at 11 kHz; it runs the top four notes of whatever chord is sounding in sixteenths ({drop['arp']}), "
-              "C6–B6, all the way through; a faint echo"})
+              "C6–B6; it starts with the kick and STOPS at the snare, with the saw; a faint echo"})
     # the heavy lead
     mel = drop["lead"]
     lbus = S.bus("Lead")
