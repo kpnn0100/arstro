@@ -50,20 +50,20 @@ ARPS = {"up": [0, 1, 2, 3], "updown": [0, 1, 2, 3, 2, 1], "jump": [0, 2, 1, 3, 0
 SIMPLE = [
     dict(mood="Longing", shape="Three notes", how="a long note, a step down, a long note — the same rhythm every two "
          "bars, a step higher over the third chord",
-         units=["B5:3 A5:1 G5:4", "B5:3 A5:1 G5:4", "C6:3 B5:1 A5:4", "B5:3 A5:1 F#5:4"], last="B5:3 A5:1 B5:4", home="E6"),
+         units=["B5:3 A5:1 G5:4", "B5:3 A5:1 G5:4", "C6:3 B5:1 A5:4", "B5:3 A5:1 F#5:2 A5:.5 B5:.5 D#6:1"], last="B5:3 A5:1 F#5:2 B5:.5 D#6:.5 F#6:1", home="E6"),
     dict(mood="Longing", shape="One note a bar", how="one held note in each bar, falling a step or a third — eight "
          "notes in eight bars",
-         units=["G5:4 F#5:4", "G5:4 E5:4", "E5:4 C5:4", "F#5:4 D#5:4"], last="F#5:4 B5:4", home="E5"),
+         units=["G5:4 F#5:4", "G5:4 E5:4", "E5:4 C5:4", "F#5:4 D#5:2 F#5:1 A5:1"], last="F#5:4 D#5:2 F#5:1 D#5:1", home="E5"),
     dict(mood="Falling", shape="The rise", how="two short steps up the chord and a long note at the top — the same "
          "climb each time, one note higher over the third chord",
-         units=["E5:2 G5:2 B5:4", "E5:2 G5:2 B5:4", "E5:2 G5:2 C6:4", "F#5:2 A5:2 B5:4"], last="F#5:2 B5:2 D#6:4", home="E6"),
+         units=["E5:2 G5:2 B5:4", "E5:2 G5:2 B5:4", "E5:2 G5:2 C6:4", "F#5:2 A5:2 B5:2 A5:.5 F#5:.5 D#5:1"], last="F#5:2 A5:2 B5:2 D#6:.5 F#6:.5 D#6:1", home="E6"),
     dict(mood="Dreamy", shape="Hold and fall", how="one long high note, then two notes falling away; over the borrowed "
          "chord the long note is its E♭",
-         units=["D6:5 B5:1 A5:2", "D6:5 A5:1 F#5:2", "E6:5 D6:1 B5:2", "Eb6:5 D6:1 C6:2"], last="Eb6:5 D6:1 A5:2", home="G5"),
+         units=["D6:5 B5:1 A5:2", "D6:5 A5:1 F#5:2", "E6:5 D6:1 B5:2", "Eb6:4 D6:1 C6:1 A5:.5 C6:.5 Eb6:1"], last="Eb6:4 D6:1 C6:1 Eb6:.5 D6:.5 A5:1", home="G5"),
     dict(mood="Longing", shape="Say it, wait", how="three notes falling down the chord in the first bar, then silence "
          "for a whole bar — the drums, the chords and the arp answer",
-         units=["B5:1 G5:1 E5:2 r:4", "B5:1 G5:1 E5:2 r:4", "C6:1 A5:1 E5:2 r:4", "B5:1 A5:1 F#5:2 r:4"],
-         last="B5:1 A5:1 B5:2 r:4", home="E5"),
+         units=["B5:1 G5:1 E5:2 r:4", "B5:1 G5:1 E5:2 r:4", "C6:1 A5:1 E5:2 r:4", "B5:1 A5:1 F#5:2 r:2 F#5:.5 A5:.5 B5:.5 D#6:.5"],
+         last="B5:1 A5:1 F#5:2 r:2 B5:.5 A5:.5 F#5:.5 D#5:.5", home="E5"),
 ]
 DROPS = [dict(name=m["shape"], mood=m["mood"], lead=m, arp=a, grid="half", about=m["how"])
          for m, a in zip(SIMPLE, ["up", "updown", "up", "gallop", "updown"])]
@@ -81,7 +81,9 @@ def arrange(drop, kick_file, trim=None):
         for k, v in zip(kicks, voic):
             notes, root = mood["units"][u % 4][v]
             hits.append((8 * u + k, min(x for x in snares if x > k) - k, notes, root))
-    hits.append((64, 2.0) + tuple(mood["units"][0][0]))
+        if u % 4 == 3:                                               # the loop's ENDING: one more stab on its last beat
+            hits.append((8 * u + 7, 1.0) + tuple(mood["units"][3][2]))
+    hits.append((64, 4.0) + tuple(mood["units"][0][0]))               # and home, held a whole bar, to finish
     count = "1 and 3 … 2 and 4, counted slow" if drop["grid"] == "half" else "1 and 3 … 2 and 4 of every bar at 150"
     line(f"# melodic dubstep drop — {drop['name']} (arstro.solaris.sound.design dubstep.py) — {BPM} bpm")
     line(f'project new drop.slp --bpm {BPM} --name "Dubstep — {drop["name"]}"')
@@ -95,7 +97,9 @@ def arrange(drop, kick_file, trim=None):
     sn, sdv, spt = S.instrument("drums", "Snare", L)
     S.set(sdv, snare__tune=2, snare__decay=210, snare__tone=0.85, clap__decay=260, clap__tone=0.7, clap__level=-5,
           rim__tune=0, rim__decay=60, rim__level=-6, volume=4)
-    S.notes(spt, [(p, 8 * u + t, 0.4, v) for u in units for t in snares for p, v in ((D.SNARE, 127), (D.CLAP, 112), (RIM, 120))])
+    S.notes(spt, [(p, 8 * u + t, 0.4, v) for u in units for t in snares for p, v in ((D.SNARE, 127), (D.CLAP, 112), (RIM, 120))] +
+                 # the ending's fill: four snares in the last beat of every loop, each louder, into the next downbeat
+                 [(D.SNARE, 8 * u + 7 + 0.25 * i, 0.2, 84 + 13 * i) for u in units if u % 4 == 3 for i in range(4)])
     S.device(sn, "transient", attack=70, sustain=-20, output=0)
     S.device(sn, "saturator", drive=9, curve="hard", mix=1, output=-5)
     S.device(sn, "eq", lowcut__on="on", lowcut__freq=120, peak1__freq=200, peak1__gain=3, peak1__q=1.2, highshelf__freq=6000,
@@ -103,7 +107,8 @@ def arrange(drop, kick_file, trim=None):
     S.device(sn, "reverb", decay=1100, size=90, mix=0.13, lowcut=300, highcut=9000, width=1)
     E.append({"name": "Snare", "strip": sn, "recipe": "HARD: the snare tuned up 2 st, 210 ms, bright, a rim shot and a clap "
               "inside it; the attack pushed (+70), the tail pulled back, clipped 9 dB, +3 dB of body at 200 Hz and of "
-              f"crack over 6 kHz, a short room — on {count.split(' … ')[1]}; 1.5 dB louder than before"})
+              f"crack over 6 kHz, a short room — on {count.split(' … ')[1]}; and a FILL in the last beat of every eight "
+              "bars: four snares, each louder, into the downbeat"})
     ht, hdv, hpt = S.instrument("drums", "Hats", L)
     S.set(hdv, chat__decay=40, chat__tone=0.7, volume=-6)
     S.notes(hpt, [(CHAT, 8 * u + 0.5 * k, 0.2, 80 if k % 2 == 0 else 54) for u in units for k in range(16)])
@@ -122,7 +127,9 @@ def arrange(drop, kick_file, trim=None):
     line(f"strip duck {bus} --under {kick} --amount 12")
     S.set(S.new('dv'), release=90)
     E.append({"name": "Saw", "strip": bus, "recipe": design["saw_note"] + f" ({mood['chords']}). It strikes with every "
-              "kick, holds flat and STOPS at the snare; nearly dry; ducked 12 dB by the kick"})
+              "kick, holds flat and STOPS at the snare; at the END of every eight bars one more stab of the loop's last chord on the "
+              "last beat (kick, bass and arp with it), and the piece finishes on the home chord held a whole bar; "
+              "nearly dry; ducked 12 dB by the kick"})
     # the heavy bass: the 808 and a driven saw-and-square over it, with the saw — no LFO anywhere
     bbus = S.bus("Bass")
     kind, shift, patch, fx = design["bass"]
@@ -190,7 +197,9 @@ def arrange(drop, kick_file, trim=None):
     E.append({"name": "Lead", "strip": lbus, "recipe": "HEAVY: the lead you loved (the Glass stack — saws, pulses, a filter "
               "that opens at each note, a 140 ms slide) with three saws and a pulse an OCTAVE BELOW through a driven "
               f"ladder, the whole lead through a tube; 1 dB louder than the chords. The melody — {mel['shape']}: "
-              f"{mel['how']}; {int(100 * D.melody_fit(mel))} % of its strong notes are in the chord"})
+              f"{mel['how']}. THE ENDING: in the last bar of every eight the line breaks its rhythm and runs — up to the "
+              "leading tone to turn the loop round, and the second time into the home note; "
+              f"{int(100 * D.melody_fit(mel))} % of its strong notes are in the chord"})
     for e in E:
         gdb = (trim or {}).get(e["name"], 0)
         if gdb:

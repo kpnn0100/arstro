@@ -73,16 +73,27 @@ changes a patch (`scripts/futurebass.py` and `references/analog-patches.md`, tog
    simple melody, you are not ready for advanced melody"* (2026-11-28). Two or three long notes in two bars, each a
    note of the chord, ONE rhythm repeated in every unit, steps and thirds, inside an octave. Leaps, sighs, late
    climaxes and call-and-response wait until a simple line has been approved. *(dubstep.py `SIMPLE`)*
+21. **A loop needs an ending.** On dubstep-004 (simple melodies, every unit alike): *"please make the end of each loop
+   more advanced so it got good ending"* (2026-11-28). The simple rhythm holds for six bars; the last bar of every
+   eight is where the line may run (to the leading tone, then home), the snare fills, and the chord stabs once more.
+   *(dubstep.py: the `u % 4 == 3` ending, `SIMPLE`'s fourth unit and `last`)*
 9. *My own reading, awaiting a verdict:* the earlier batches sat an octave too high; the registers are lower now.
 
 ## Batches
+
+### dubstep-005 (2026-11-28) — the simple melodies, with an ending to every loop
+
+The same five; in the last bar of every eight: the lead leaves its rhythm for a short run (up to the leading tone the
+first time, into the home note the second), four snares rising in the last beat, one more chord stab with kick, bass
+and arp on that beat; the piece ends on the home chord held a whole bar. 21–33 notes a melody. *Awaiting verdicts.*
 
 ### dubstep-004 (2026-11-28) — the same drop, five SIMPLE melodies
 
 1 **Three notes** (Longing: long, a step down, long) · 2 **One note a bar** (Longing) · 3 **The rise** (Falling: two
 steps up, a long note) · 4 **Hold and fall** (Dreamy) · 5 **Say it, wait** (Longing: three notes, then a bar of rest).
 17–25 notes in 16 bars (the earlier ones: 50–60); 84–100 % of strong notes in the chord. All in the slow count — the
-count question (lesson 19) is still unanswered. *Awaiting verdicts.*
+count question (lesson 19) is still unanswered.
+No marks; in chat: "please make the end of each loop more advanced so it got good ending" → lesson 21, dubstep-005.
 
 ### dubstep-003 (2026-11-27) — dubstep-002 with the arp stopping at the snare
 

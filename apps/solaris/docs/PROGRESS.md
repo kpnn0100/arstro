@@ -64,7 +64,7 @@ line; runs beside it.
 - `[ ]` The melody and sound-design skills are written for a developer running the lab servers;
   each needs an "inside Solaris" section before an in-app agent is given them.
 
-**► K23** — the user judges dubstep-004 (the specified dubstep drop with five SIMPLE melodies) (melodic dubstep to their specification: hard snare, 8-bit arp, heavy bass and lead) and drops-007 (five clean, thick plucks) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► K25** — the user judges dubstep-005 (simple melodies with an ending to every eight-bar loop) (melodic dubstep to their specification: hard snare, 8-bit arp, heavy bass and lead) and drops-007 (five clean, thick plucks) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -1100,7 +1100,10 @@ good UI UX, physical base (math base) and follow music industrial standard / lea
 - [x] **K21** The user's verdicts on dubstep-002/003 (chat) → taste.md: "arp stop when snare" (done, dubstep-003);
       "please make more simple melody, you are not ready for advanced melody" → lesson 20.
 - [x] **K22** dubstep-004: `dubstep.py` `SIMPLE` — five melodies of two or three long chord notes in one repeated rhythm.
-- [ ] **K23** The user's verdicts on dubstep-004 → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
+- [x] **K23** The user's verdict on dubstep-004 (chat) → taste.md lesson 21: "make the end of each loop more advanced
+      so it got good ending".
+- [x] **K24** dubstep-005: every eight bars end — a lead run, a snare fill, one more stab; a held final chord.
+- [ ] **K25** The user's verdicts on dubstep-005 → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
