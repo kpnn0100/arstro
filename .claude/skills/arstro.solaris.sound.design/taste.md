@@ -67,6 +67,19 @@ changes a patch (`scripts/futurebass.py` and `references/analog-patches.md`, tog
 
 ## Batches
 
+### dubstep-001 (2026-11-27) — "try melodic dubstep": five drops
+
+The approved parts kept (the kick sample, the 808 as sub, the wide supersaw, the mood chords, the Glass stack lead);
+new: the chords HELD and pumping, a bigger snare on 3 of every bar, hats, and a GROWL bass (`dubstep.py`):
+1. **Soaring** (Longing) — chords and lead throughout, the eighth-note wobble only as a fill.
+2. **Melody asks, bass answers** (Longing) — chords + lead for five beats, the wobble alone for three.
+3. **Bass asks, melody answers** (Falling) — a triplet growl alone in bar one, chords and a long sliding lead in bar two.
+4. **Talking bass** (Longing) — chords held, the lead's rises answered by a 'yoi' bass (band-pass + vowel filter).
+5. **Wall** (Dreamy) — chords, lead and a slow half-bar swell bass all at once.
+Measured: every element at its target alone; the growl's brightness moves at 5.0 Hz (an eighth), 7.5 Hz (eighth
+triplets), 1.25 Hz (half a bar) as set; drop 4's quarter-note sweep was not resolved by the measure.
+*Awaiting verdicts.* (drops-007's plucks are still unjudged.)
+
 ### drops-007 (2026-11-27) — one call and response, five clean, thick plucks
 
 "Question and answer" over Longing, the Glass stack lead; only the pluck differs (−17 LUFS alone, low cut 160 Hz, a

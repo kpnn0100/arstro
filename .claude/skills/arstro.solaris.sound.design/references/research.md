@@ -30,6 +30,17 @@
 These are techniques, rebuilt on the analog synth as `drops.py` `LEADS`; no artist's patch, melody or sample is copied.
 (The exact article URLs were read through search results and a fetch agent; Splice's page refused the fetch.)
 
+## Melodic dubstep
+
+| source | what it gave |
+|---|---|
+| Native Instruments, "How to make dubstep" (https://blog.native-instruments.com/how-to-make-dubstep/); Cymatics, "How to make dubstep" (https://cymatics.fm/blogs/production/how-to-make-dubstep) | half time: the kick on beat 1, the snare on beat 3; a quieter second snare for variation |
+| Audiotool tutorials (https://audiotool.com/track/how_to_create_a_dubstep_drop, https://www.audiotool.com/track/melodic_dubstep_chords_tutorial_thingy) | call and response: the growl on the kick, the high lead answering on and past the snare, swapped on repeats; chord stacks from 2–3 saw synths |
+| Bass Gorilla, Serum growl bass (https://bassgorilla.com/serum-tutorial-super-growl-bass-in-ableton-live/); MusicRadar, LFO wobble bass (https://www.musicradar.com/how-to/lfo-wobble-bass) and FM growl (https://www.musicradar.com/tuition/tech/how-to-make-a-growling-bass-sound-using-fm-synthesis-606919) | a growl is a low oscillator through a band-pass with some resonance and drive, an LFO at a note value on the cutoff, distortion after; keep the sub separate and clean |
+
+Read as search summaries, not the full pages. No breakdown of a Seven Lions or Illenium drop was found; the 'yoi'
+(a rising sweep into a vowel filter) is this skill's own construction on the genre's band-pass recipe.
+
 **Honest limits.** No interview or session breakdown from Illenium, San Holo or Martin Garrix was found; their style
 is described here as habits of the genre (a quiet verse on piano or guitar, a drop whose lead is its chords, long
 soaring notes or short syncopated stabs), and no melody, progression or sound of theirs is reproduced. The Szabo
