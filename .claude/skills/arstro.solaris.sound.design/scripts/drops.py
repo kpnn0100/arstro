@@ -101,6 +101,60 @@ OPTIONS = [
          bass_note="a sine driven 20 dB into the ladder's tanh, then clipped: odd harmonics on a sub — loud on any speaker"),
 ]
 
+# ── drops-002: one sound (the design the user loved), five MOODS ────────────────────────────────────────────────────
+# The user's pattern, counted over two bars: the kick on 1, 4 and 6, the snare on 3 and 7. The saw strikes with each
+# kick and holds to the next kick or the snare: 2 beats, 2 beats, 1 beat — then a beat and a half of air.
+KICK8, SNARE8 = [0, 3, 5], [2, 6]
+# A mood is four two-bar units, played twice; a unit is its three hits: (the chord's notes low to high, the bass note).
+MOODS = [
+    dict(name="Bittersweet", about="IV–V–vi–I with ninths, the bass walking up to the third",
+         chords="Cmaj9 · Dadd9 · Em9 · G/B",
+         units=[[("C3 G3 B3 E4 G4 D5 G5", "C2")] * 2 + [("C3 G3 B3 E4 G4 D5 E5", "C2")],
+                [("D3 A3 E4 F#4 A4 E5 A5", "D2")] * 2 + [("D3 A3 E4 F#4 A4 D5 F#5", "D2")],
+                [("E3 B3 D4 G4 B4 F#5 G5", "E1")] * 2 + [("E3 B3 D4 G4 B4 F#5 B5", "E1")],
+                [("B2 G3 D4 F#4 B4 D5 G5", "B1")] * 2 + [("B2 G3 D4 F#4 A4 D5 F#5", "B1")]]),
+    dict(name="Longing", about="minor ninths, a Lydian colour, and a dominant that hangs before it resolves",
+         chords="Em9 · Cmaj7♯11 · Am9 · B7sus4 → B7",
+         units=[[("E3 B3 D4 F#4 B4 G5", "E1")] * 2 + [("E3 B3 D4 F#4 B4 F#5", "E1")],
+                [("C3 G3 B3 E4 F#4 B4 G5", "C2")] * 2 + [("C3 G3 B3 E4 F#4 B4 E5", "C2")],
+                [("A2 E3 G3 C4 E4 B4 E5", "A1")] * 2 + [("A2 E3 G3 C4 E4 B4 C5", "A1")],
+                [("B2 A3 E4 F#4 B4 E5", "B1")] * 2 + [("B2 A3 D#4 F#4 B4 D#5", "B1")]]),
+    dict(name="Dreamy", about="G major with sevenths, and the borrowed minor iv — the chord that aches",
+         chords="Gmaj9 · Bm11 · Cmaj9 · Cm6",
+         units=[[("G3 D4 F#4 A4 B4 F#5", "G1")] * 2 + [("G3 D4 F#4 A4 B4 D5", "G1")],
+                [("B2 F#3 A3 D4 E4 A4 F#5", "B1")] * 2 + [("B2 F#3 A3 D4 E4 A4 E5", "B1")],
+                [("C3 G3 B3 E4 G4 D5 E5", "C2")] * 2 + [("C3 G3 B3 E4 G4 D5 G5", "C2")],
+                [("C3 G3 A3 Eb4 G4 C5 Eb5", "C2")] * 2 + [("C3 G3 A3 Eb4 G4 C5 D5", "C2")]]),
+    dict(name="Lifted", about="suspensions under one held top note, each resolving on the third hit",
+         chords="Em7 · Cadd9 · Gsus2 → G · Dsus4 → D",
+         units=[[("E3 B3 D4 G4 B4 D5 G5", "E1")] * 3,
+                [("C3 G3 D4 E4 G4 D5 G5", "C2")] * 3,
+                [("G3 D4 A4 D5 G5", "G1")] * 2 + [("G3 D4 B4 D5 G5", "G1")],
+                [("D3 A3 D4 G4 A4 D5 G5", "D2")] * 2 + [("D3 A3 D4 F#4 A4 D5 F#5", "D2")]]),
+    dict(name="Falling", about="one chord held while the bass steps down under it — a line cliché to the dominant",
+         chords="Em(add9) · Em/D♯ · Em7/D · C♯ø7 · Cmaj7 · B7sus4 → B7",
+         units=[[("E3 B3 E4 G4 B4 F#5", "E2")] * 2 + [("D#3 B3 E4 G4 B4 F#5", "D#2")],
+                [("D3 B3 E4 G4 B4 F#5", "D2")] * 2 + [("C#3 B3 E4 G4 B4 E5", "C#2")],
+                [("C3 B3 E4 G4 B4 E5", "C2")] * 2 + [("C3 B3 E4 G4 B4 G5", "C2")],
+                [("B2 A3 E4 F#4 B4 E5", "B1")] * 2 + [("B2 A3 D#4 F#4 B4 D#5", "B1")]]),
+]
+
+
+def mood_segments(mood):
+    """(beat, length, chord (name, notes, bass)) for the 16 bars: four units, twice; and the snares."""
+    seg, snares = [], []
+    for u in range(8):
+        t0 = 8 * u
+        for i, k in enumerate(KICK8):
+            nxt = min([x for x in KICK8 + SNARE8 if x > k] + [8])
+            notes, bass = mood["units"][u % 4][i]
+            seg.append((t0 + k, nxt - k, (mood["name"], notes, bass)))
+        snares += [t0 + x for x in SNARE8]
+    notes, bass = mood["units"][0][0]
+    seg.append((64, 2.0, (mood["name"], notes, bass)))               # home once more, held to where a snare would be
+    return seg, snares
+
+
 # each element alone, LUFS over the 16 bars — the kick and the bass up front (they are what is judged, with the saw)
 TARGETS = {"Kick": -10.0, "Snare": -16.5, "Saw": -14.5, "Bass": -16.0}   # the kick at −13: its hit only 4.8 dB over the mix
 
@@ -119,10 +173,11 @@ def segments():
     return out
 
 
-def arrange(opt, kick_file, trim=None):
+def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None):
     S, E, L = Script(), [], 4 * BARS + 8
     line = S.line
-    seg = segments()
+    seg = seg or segments()
+    snares = snares if snares is not None else [4 * b + 2 for b in range(BARS)]
     line(f"# drop — {opt['name']}: {opt['about']} (arstro.solaris.sound.design drops.py) — E minor, {BPM} bpm half time")
     line(f'project new drop.slp --bpm {BPM} --name "Drop — {opt["name"]}"')
     # the kick: the user's sample, as recorded
@@ -132,11 +187,11 @@ def arrange(opt, kick_file, trim=None):
     line(f'set {kick}.name="Kick" {kpt}.name="Kick" {kpt}.length={num(L)} {kdv}.mode=one-shot {kdv}.release=200 {kdv}.velocity=0')
     S.notes(kpt, [(60, t, 1.0, 127) for t, _, _ in seg])
     E.append({"name": "Kick", "strip": kick, "recipe": f"your sample {os.path.basename(kick_file)}, as recorded, on "
-              "1 · the and of 2 · the and of 4, then 1 · the a of 1 · the and of 2 · the a of 3 · the and of 4"})
+              + (kick_words or "1 · the and of 2 · the and of 4, then 1 · the a of 1 · the and of 2 · the a of 3 · the and of 4")})
     # the snare: tight and bright, a clap on it, a short room
     sn, sdv, spt = S.instrument("drums", "Snare", L)
     S.set(sdv, snare__tune=3, snare__decay=170, snare__tone=0.78, clap__decay=300, clap__tone=0.6, clap__level=-3, volume=3)
-    S.notes(spt, [(p, 4 * b + 2, 0.25, v) for b in range(BARS) for p, v in ((SNARE, 120), (CLAP, 112))])
+    S.notes(spt, [(p, t, 0.25, v) for t in snares for p, v in ((SNARE, 120), (CLAP, 112))])
     S.device(sn, "transient", attack=40, sustain=-10, output=0)
     S.device(sn, "reverb", decay=900, size=70, mix=0.14, lowcut=300, highcut=10000, width=0.8)
     E.append({"name": "Snare", "strip": sn, "recipe": "the Drum Machine's snare tuned up 3 st, 170 ms, bright, with a "
@@ -189,6 +244,8 @@ def main():
     ap.add_argument("--only", default="")
     ap.add_argument("--cc", default=DEFAULT_CC)
     ap.add_argument("--quick", action="store_true", help="one render, no levelling pass")
+    ap.add_argument("--moods", action="store_true", help="five MOODS (chord sets) on one sound, the user's sparser pattern")
+    ap.add_argument("--design", default="808", help="with --moods: which of OPTIONS plays them")
     a = ap.parse_args()
     out = os.path.abspath(os.path.expanduser(a.out))
     os.makedirs(out, exist_ok=True)
@@ -205,15 +262,21 @@ def main():
             old = {m["id"]: m for m in json.load(f).get("melodies", [])}
     items, failed = [], 0
     seconds = round((4 * BARS + 8) * 60 / BPM)
-    for k, opt in enumerate(OPTIONS, 1):
-        sid = f"drop-{k}"
+    design = next(o for o in OPTIONS if o["name"].lower() == a.design.lower())
+    runs = [(m, design) for m in MOODS] if a.moods else [(None, o) for o in OPTIONS]
+    for k, (mood, opt) in enumerate(runs, 1):
+        sid = f"mood-{k}" if mood else f"drop-{k}"
         if only and str(k) not in only:
             if sid in old:
                 items.append(old[sid])
             continue
         trim, ok, E = {}, True, []
         for attempt in ((1, 2) if not a.quick else (2,)):
-            text, E = arrange(opt, kick, trim)
+            if mood:
+                seg, snares = mood_segments(mood)
+                text, E = arrange(opt, kick, trim, seg, snares, "the kick on 1, 4 and 6 of every two bars (the snare on 3 and 7)")
+            else:
+                text, E = arrange(opt, kick, trim)
             text = text.replace("project new drop.slp", f"project new {sid}.slp")
             text += f"render --out {sid}.mp3 --format mp3 --kbps 192 --stems " + ",".join(e["strip"] for e in E) + "\n"
             with open(os.path.join(out, sid + ".txt"), "w") as f:
@@ -230,17 +293,19 @@ def main():
             if attempt == 1:
                 trim = {n: max(-18, min(18, round(TARGETS[n] - v, 1))) for n, v in lufs.items() if v is not None and v > -60}
         failed += not ok
-        item = {"id": sid, "title": f"Drop {k} — {opt['name']}: {opt['about']}", "sound": True, "section": "drop",
+        title = (f"Mood {k} — {mood['name']}: {mood['chords']}" if mood else f"Drop {k} — {opt['name']}: {opt['about']}")
+        item = {"id": sid, "title": title, "sound": True, "section": "drop",
                 "style": "future-bass", "style_label": "Future bass drop — kick, snare, saw, bass", "bpm": BPM,
                 "key": "E minor", "form_label": "sound — drop", "seconds": seconds,
-                "devices": [f"{e['name']}: {e['recipe']}" for e in E], "elements": E,
+                "devices": ([f"mood: {mood['about']}", f"sound: the {opt['name']} design — {opt['about']}"] if mood else []) +
+                           [f"{e['name']}: {e['recipe']}" for e in E], "elements": E,
                 "audio": [{"label": "full", "file": f"{sid}.mp3"}] +
                          [{"label": e["name"].lower(), "file": f"{sid}.{e['strip']}.mp3"} for e in E],
                 "metrics": {}}
         if ok:
             lufs["mix"] = loudness(os.path.join(out, sid + ".mp3"))
             item["metrics"] = {"lufs": lufs, "trim": trim}
-            print(f"{sid} {opt['name']}: ok — " + " · ".join(f"{n} {v}" for n, v in lufs.items()) +
+            print(f"{sid} {mood['name'] if mood else opt['name']}: ok — " + " · ".join(f"{n} {v}" for n, v in lufs.items()) +
                   " · trim " + " ".join(f"{n} {v:+g}" for n, v in trim.items()), flush=True)
         items.append(item)
         with open(path, "w") as f:                                   # after every option: the lab shows what is done

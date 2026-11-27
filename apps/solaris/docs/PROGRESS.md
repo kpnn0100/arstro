@@ -64,7 +64,7 @@ line; runs beside it.
 - `[ ]` The melody and sound-design skills are written for a developer running the lab servers;
   each needs an "inside Solaris" section before an in-app agent is given them.
 
-**► K5** — the user judges drops-001 (five bare drops: their kick, a snare, a saw and a bass each) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► K7** — the user judges drops-002 (five chord moods on the loved 808 design, the sparser kick) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -1065,7 +1065,12 @@ good UI UX, physical base (math base) and follow music industrial standard / lea
 - [x] **K4** drops-001: scripts/drops.py — the bare drop (the Sampler playing the user's `kick_trap`, a tight snare
       and clap, one saw bus, one bass; Em · C · G · D), five saw × bass designs, levelled; the kick's hit 8.3–8.5 dB
       over the mix, the saw and bass stopped at the snare (measured). The lab lists batches newest last.
-- [ ] **K5** The user's verdicts on drops-001 → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
+- [x] **K5** The user's verdicts on drops-001 → taste.md.
+      — Drop 2 (808) love, "love the bass of this"; 1 and 3 okay; 4 weak; 5 no. Then: fewer kicks (1, 4, 6; snare 3, 7)
+      and "more advanced chord that bring mood". Lessons 12, 13.
+- [x] **K6** drops-002: `drops.py --moods` — the loved design on the sparser pattern, five chord sets (Bittersweet,
+      Longing, Dreamy, Lifted, Falling).
+- [ ] **K7** The user's verdicts on drops-002 → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

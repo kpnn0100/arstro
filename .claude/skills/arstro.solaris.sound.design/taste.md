@@ -37,9 +37,26 @@ changes a patch (`scripts/futurebass.py` and `references/analog-patches.md`, tog
    from there only on their word. *(scripts/drops.py)*
 11. **The kick is a sample, and it is loud.** The user's pack (26 kicks, kept outside the repository); `kick_trap` is
    the punchiest by measure (159 ms body, 14 dB crest). At −13 LUFS its hit stood 4.8 dB over the mix; at −10, 8.4 dB.
+12. **The bass is an 808.** drops-001: Drop 2 **love** — *"love the bass of this"* (the 808: a sine with a 5-semitone
+   thump in 18 ms, driven 0.55, no glide; under the wider, brighter supersaw). A pure sine and a driven saw bass were
+   okay; a hollow square weak; a distorted, clipped sub **no**. *(the 808 design is the default for every drop)*
+13. **Fewer kicks; chords that carry a mood.** *"make it less kick, just drop snare at 3 and 7, kick at 1, 4, 6, now play
+   some more advanced chord that bring mood"*. Over two bars: kick on 1, 4, 6; snare on 3, 7. Triads are not enough:
+   ninths, sus chords that resolve, a borrowed minor iv, a bass that walks under a held chord. *(drops.py --moods)*
 9. *My own reading, awaiting a verdict:* the earlier batches sat an octave too high; the registers are lower now.
 
 ## Batches
+
+### drops-002 (2026-11-27) — one sound, five moods
+
+The loved design (Drop 2: the wide supersaw, the 808) on the user's sparser pattern, five chord sets in E minor / G major:
+1. **Bittersweet** — Cmaj9 · Dadd9 · Em9 · G/B.
+2. **Longing** — Em9 · Cmaj7♯11 · Am9 · B7sus4 → B7.
+3. **Dreamy** — Gmaj9 · Bm11 · Cmaj9 · Cm6 (the borrowed minor iv).
+4. **Lifted** — Em7 · Cadd9 · Gsus2 → G · Dsus4 → D, one top note held.
+5. **Falling** — Em(add9) over a bass stepping down E · D♯ · D · C♯ · C · B, to B7.
+
+The third hit of each two bars moves the top note or resolves the chord. Levels as drops-001. *Awaiting verdicts.*
 
 ### drops-001 (2026-11-27) — the bare drop: five saws, five basses
 
@@ -53,7 +70,10 @@ a tight snare and clap on 3), so only the saw and the bass differ:
 
 Measured, the same in every option: kick −10, saw −14.5, bass −16, snare −16.5 LUFS alone; the kick's hit 8.3–8.5 dB
 over the mix; the saw 31–35 dB down within the gap after the snare (only its short room), the bass silent; true peak
-−1.5 dBTP. *Awaiting verdicts.*
+−1.5 dBTP.
+counts: love 1 · good 0 · okay 2 · weak 1 · no 1
+loved: 2 (808) — "love the bass of this" · okay: 1 (Classic), 3 (Stack) · weak: 4 (Tight) · no: 5 (Driven)
+in chat: "all 5 is good but make it less kick …" — the page's marks are the record. lesson: 12, 13.
 
 ### songs-002 (2026-11-27) — the first songs on the analog synth
 
