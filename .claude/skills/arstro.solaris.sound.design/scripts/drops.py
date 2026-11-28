@@ -380,7 +380,11 @@ def call_lines(c):
 # to −1 (AnalogSynth (A18)) — so each eighth OPENS at once and closes; on the level the same LFO is full at the start
 # and fades. Every option is that shape at an eighth note; they differ in how ELECTRONIC the saw is.
 _LP = dict(filter__mode='"lowpass 24"', filter__keytrack=0.3, lfo__fade=0, lfo__shape="saw", lfo__sync='"1/8"')
-_DIG = dict(_LP, filter__cutoff=1400, filter__res=0.3, lfo__cutoff=2.4, lfo__amp=0.6, sub__noise=0)
+# drops-010's verdict: "make the saw less wob, just linear fade out for each loop of lfo". So the LFO now moves the
+# LEVEL — full at the start of every eighth, a straight line down to its end — and the filter stays open and (almost)
+# still: no sweep, no 'wob'. The clipped, crushed "Digital" colour is kept.
+def _fade(depth, sweep=0.0, **more):
+    return dict(_LP, filter__cutoff=6500, filter__res=0.05, lfo__cutoff=sweep, lfo__amp=depth, sub__noise=0, **more)
 
 
 def _dig(bits, rate, mix, clip=8):
@@ -388,23 +392,25 @@ def _dig(bits, rate, mix, clip=8):
             ("bitcrusher", dict(bits=bits, rate=rate, mix=mix, output=0))]
 
 
-# drops-009's "Digital" saw ("option 5's saw have pontential") is now the saw of every option — the falling
-# eighth-note filter and level, clipped, crushed — taken a little further each way.
 SAW_LFOS = [
-    dict(name="Digital", words="the saw you picked, as it was: clipped hard and half-crushed to 9 bits at 16 kHz",
-         patch=_DIG, fx=_dig(9, 16000, 0.5)),
-    dict(name="Digital, harder", words="the same crushed further — 8 bits at 12 kHz, mixed in more, clipped harder",
-         patch=_DIG, fx=_dig(8, 12000, 0.65, 11)),
-    dict(name="Digital pulse", words="the octave stack as pulse waves whose width the LFO sweeps, then the same clip "
-         "and crush — hollow and gritty",
-         patch=dict(_DIG, osc2__wave="pulse", osc2__width=0.5, lfo__width=0.3), fx=_dig(9, 16000, 0.5)),
-    dict(name="Digital acid", words="more resonance (0.45) and a driven ladder under the clip and crush — each eighth "
-         "zaps down",
-         patch=dict(_DIG, filter__res=0.45, filter__drive=6, lfo__cutoff=2.8), fx=_dig(9, 16000, 0.5)),
-    dict(name="Digital, cleaner", words="the lightest: 10 bits at 20 kHz, less of it, a softer clip — the grit as a "
-         "colour, not the whole sound",
-         patch=_DIG, fx=_dig(10, 20000, 0.35, 5)),
+    dict(name="Fade to silence", words="each eighth note starts full and fades in a straight line to nothing; the "
+         "filter does not move; clipped and half-crushed (9 bits)", patch=_fade(1.0), fx=_dig(9, 16000, 0.5)),
+    dict(name="Fade to a fifth", words="the same straight fade, stopping at a fifth of the level — the chord never "
+         "quite goes away between pulses", patch=_fade(0.8), fx=_dig(9, 16000, 0.5)),
+    dict(name="Fade, a touch darker", words="fades to nothing and the filter closes just a little with it (half an "
+         "octave) — the smallest hint of the old movement; crushed harder (8 bits)",
+         patch=_fade(1.0, 0.5), fx=_dig(8, 12000, 0.6, 10)),
+    dict(name="Gentle fade", words="fades only to a third of the level — the smoothest; the crush lighter (10 bits)",
+         patch=_fade(0.65), fx=_dig(10, 20000, 0.35, 5)),
+    dict(name="Fade, pulse", words="fades to nothing; the octave stack as pulse waves — a hollower, more synthetic "
+         "chord", patch=_fade(1.0, osc2__wave="pulse", osc2__width=0.45), fx=_dig(9, 16000, 0.5)),
 ]
+# the lead made heavier: three saws and a pulse an octave BELOW the Glass stack, through a driven ladder
+WEIGHT = ("analog", "weight", -12, dict(osc1__wave="saw", osc1__unison=3, osc1__detune=0.2, osc1__blend=0.6, osc1__spread=0.4,
+                                         osc1__level=0.8, osc2__wave="pulse", osc2__width=0.45, osc2__level=0.4,
+                                         filter__mode='"lowpass 24"', filter__cutoff=2200, filter__res=0.1, filter__drive=12,
+                                         filter__keytrack=0.5, voice__mode="mono", voice__glide=0, amp__attack=3,
+                                         amp__release=60, volume=-11), "slide")
 # a different mood and a different SIMPLE melody for each option (lessons 20–22: a few long chord notes, one rhythm, the
 # last bar of every eight a slow run)
 LFO_SONGS = [
@@ -425,12 +431,13 @@ LFO_SONGS = [
          last="F#5:2 A5:2 B5:1 D#6:1 F#6:1 D#6:1", home="E6"),
 ]
 # the LEAD's LFO ("lead lfo too"): the same falling eighth-note ramp on the lead's filter and level
-LEAD_LFO = dict(lfo__shape="saw", lfo__sync='"1/8"', lfo__fade=0, lfo__cutoff=1.6, lfo__amp=0.55, lfo__width=0, lfo__pitch=0)
+LEAD_LFO = dict(lfo__shape="saw", lfo__sync='"1/8"', lfo__fade=0, lfo__cutoff=0.3, lfo__amp=0.7, lfo__width=0, lfo__pitch=0,
+                voice__glide=0)
 # the HEAVIER bass for --lfo ("the bass is need to be more heavier"): the loved 808 pushed harder, and over it a saw
 # and a square through a driven ladder, saturated — both with every kick
 HEAVY = dict(osc1__wave="saw", osc1__octave=-1, osc1__unison=1, osc1__level=0.8, osc2__wave="pulse", osc2__width=0.5,
-             osc2__octave=-1, osc2__unison=1, osc2__level=0.55, sub__level=0, filter__mode='"lowpass 24"',
-             filter__cutoff=460, filter__res=0.12, filter__drive=22, filter__env=2.0, filter__keytrack=0.3, fenv__attack=0,
+             osc2__octave=-1, osc2__unison=1, osc2__level=0.8, sub__level=0, filter__mode='"lowpass 24"',
+             filter__cutoff=1300, filter__res=0.15, filter__drive=20, filter__env=1.6, filter__keytrack=0.3, fenv__attack=0,
              fenv__decay=320, fenv__sustain=0.4, fenv__release=80, amp__attack=1, amp__decay=0, amp__sustain=1,
              amp__release=40, velocity=0, voice__mode="mono", voice__glide=0, voice__phase="reset", voice__drift=0, volume=-8)
 SAW_FX = []             # set by main() for --lfo: effects on the saw bus, before its EQ
@@ -560,15 +567,15 @@ def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None, m
         S.set(hvd, **HEAVY)
         S.notes(hvp, [(midi(root) + (12 if midi(root) < midi("C2") else 0) + 12, t, max(0.1, d - 0.04), 115)
                       for t, d, (_, _, root) in seg])
-        S.device(hv, "saturator", drive=18, curve="tube", mix=1, output=-8)
-        S.device(hv, "eq", lowcut__on="on", lowcut__freq=90)
+        S.device(hv, "saturator", drive=16, curve="hard", mix=1, output=-8)
+        S.device(hv, "eq", lowcut__on="on", lowcut__freq=90, peak1__freq=1200, peak1__gain=3, peak1__q=0.8)
+        line(f"set {bass}.gain=-5")                                  # the 808 under it now, as the sub only
         line(f"route {hv} --to {bbus}")
-        S.device(bbus, "saturator", drive=6, curve="tube", mix=1, output=-3)
-        S.device(bbus, "eq", lowshelf__freq=90, lowshelf__gain=2.5)
+        S.device(bbus, "saturator", drive=5, curve="hard", mix=1, output=-3)
         bass = bbus
-        heavy = (" HEAVIER AGAIN: the 808 at full drive with a bigger thump, and an octave over it — now as loud as "
-                 "the 808 — a saw and a square through a ladder at 460 Hz driven 22 dB, then a tube; the two glued by "
-                 "another tube with +2.5 dB under 90 Hz; 3.5 dB louder in the mix than the first drops")
+        heavy = (" HARD, and mostly SAW AND SQUARE now: a saw and a square at equal strength through a ladder opened "
+                 "to 1.3 kHz and driven 20 dB, then CLIPPED hard (16 dB) with +3 dB at 1.2 kHz — that is the bass you "
+                 "hear; the 808 is 5 dB under it, the sub only; the two clipped together")
     S.device(bass, "imager", width=0, mono="on", frequency=200)
     line(f"strip duck {bass} --under {kick} --amount 14")
     S.set(S.new('dv'), release=70)
@@ -580,7 +587,14 @@ def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None, m
         mn = melody_notes(melody)
         # a note that runs straight into the next overlaps it (so the voice slides); one before a rest ends early
         tied = [i + 1 < len(mn) and abs(mn[i + 1][0] - (t + d)) < 1e-6 for i, (t, d, p) in enumerate(mn)]
-        for kind, part, shift, patch, how in lead["layers"]:
+        layers = lead["layers"]
+        if SAW_EXTRA:   # --lfo: the lead sounds only WITH the chords (kick to snare), struck with each, and heavier
+            mn = [(max(t, a), min(t + d, a + ln) - max(t, a), p) for a, ln, _ in seg for t, d, p in mn
+                  if min(t + d, a + ln) - max(t, a) > 0.2]
+            mn.sort()
+            tied = [False] * len(mn)
+            layers = layers + [WEIGHT]
+        for kind, part, shift, patch, how in layers:
             ch, dv, pt = S.instrument(kind, f"Lead {part}", L)
             S.set(dv, **(dict(dict(dict(FLAT, volume=-10), **(patch or LEAD)), **(LEAD_LFO if SAW_EXTRA else {}))
                          if kind == "analog" else patch))
@@ -601,8 +615,9 @@ def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None, m
         line(f"strip duck {lbus} --under {kick} --amount 4")
         S.set(S.new('dv'), release=90)
         E.append({"name": "Lead", "strip": lbus, "recipe": f"the melody — {melody['shape']}: {melody['how']}. THE SOUND — "
-                  f"{lead['name']}: {lead['recipe']}" + ("; ITS LFO: the same falling eighth-note ramp as the saw's on its "
-                  "filter and level, so a held note pulses with the chords" if SAW_EXTRA else "") + f"; low cut 180 Hz, an echo, a 2.4 s room; "
+                  f"{lead['name']}: {lead['recipe']}" + ("; HEAVIER — three saws and a pulse an octave below through a driven "
+                  "ladder; it sounds ONLY WITH THE CHORDS (kick to snare), struck with each, on the melody's note of "
+                  "that moment, fading each eighth with them — it thickens the chord; the pluck carries the tune" if SAW_EXTRA else "") + f"; low cut 180 Hz, an echo, a 2.4 s room; "
                   f"{int(100 * melody_fit(melody))} % of its strong notes are in the chord under them"})
     if pluck:   # the pluck that answers: struck, short, its own echo bouncing side to side
         words, patch = PLUCKS[pluck["sound"]]
@@ -616,7 +631,7 @@ def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None, m
         S.device(pch, "reverb", decay=2000, size=110, mix=0.2, lowcut=500, highcut=11000, width=1)
         line(f"strip duck {pch} --under {kick} --amount 3")
         S.set(S.new('dv'), release=90)
-        E.append({"name": "Pluck", "strip": pch, "recipe": f"the answer — {words}; a dotted-eighth echo, a room, wide; "
+        E.append({"name": "Pluck", "strip": pch, "recipe": ("THE MELODY, all of it — " if SAW_EXTRA else "the answer — ") + f"{words}; a dotted-eighth echo, a room, wide; "
                   f"{int(100 * melody_fit(pluck))} % of its strong notes are in the chord under them"})
     for e in E:
         g = (trim or {}).get(e["name"], 0)
@@ -661,13 +676,13 @@ def main():
     design = next(o for o in OPTIONS if o["name"].lower() == a.design.lower())
     by = {m["name"]: m for m in MOODS}
     c0 = CALLS[0]
-    runs = ([(by[m["mood"]], design, m, LEADS[0], None) for m in LFO_SONGS] if a.lfo else [(by[c0["mood"]], design, call_lines(c0)[0], LEADS[0], dict(call_lines(c0)[1], sound=x)) for x in THICK]
+    runs = ([(by[m["mood"]], design, m, LEADS[0], dict(m, sound="supersaw")) for m in LFO_SONGS] if a.lfo else [(by[c0["mood"]], design, call_lines(c0)[0], LEADS[0], dict(call_lines(c0)[1], sound=x)) for x in THICK]
             if a.plucks else [(by[c["mood"]], design, call_lines(c)[0], LEADS[0], dict(call_lines(c)[1], sound=c["sound"])) for c in CALLS]
              if a.calls else [(by[MELODIES[0]["mood"]], design, MELODIES[0], ld, None) for ld in LEADS] if a.leads else
             [(by[x["mood"]], design, x, None, None) for x in MELODIES] if a.melody else
             [(m, design, None, None, None) for m in MOODS] if a.moods else [(None, o, None, None, None) for o in OPTIONS])
     for k, (mood, opt, mel, ld, pl) in enumerate(runs, 1):
-        sid = f"sawlfo-{k}" if a.lfo else f"pluck-{k}" if a.plucks else f"call-{k}" if pl else f"lead-{k}" if ld else f"melody-{k}" if mel else (f"mood-{k}" if mood else f"drop-{k}")
+        sid = f"lfo-{k}" if a.lfo else f"pluck-{k}" if a.plucks else f"call-{k}" if pl else f"lead-{k}" if ld else f"melody-{k}" if mel else (f"mood-{k}" if mood else f"drop-{k}")
         if only and str(k) not in only:
             if sid in old:
                 items.append(old[sid])
@@ -679,6 +694,7 @@ def main():
             SAW_EXTRA.update(SAW_LFOS[k - 1]["patch"])
             SAW_FX.extend(SAW_LFOS[k - 1]["fx"])
             TARGETS["Bass"] = -12.5
+            TARGETS["Pluck"] = -15.0
         for attempt in ((1, 2) if not a.quick else (2,)):
             if mood:
                 seg, snares = mood_segments(mood)

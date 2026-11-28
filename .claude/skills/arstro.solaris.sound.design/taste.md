@@ -90,9 +90,24 @@ changes a patch (`scripts/futurebass.py` and `references/analog-patches.md`, tog
    clipped, half-crushed) is the reading of "electronic" that landed; the lead takes the same falling eighth-note LFO;
    the bass has now been asked heavier TWICE — if a third time, it is the instrument or the level of the kick, not
    more drive. A batch should vary chords and melody, not one song five times. *(drops.py --lfo, `LFO_SONGS`)*
+25. **A straight fade, not a wob; the lead thickens the chord; the bass is saw and square.** drops-010: *"make the saw
+   less wob, just linear fade out for each loop of lfo, lead need more heavy and maybe add pluck for melody, lead only
+   run with chord to more thickness, bass is still not hard enough, bass need to be more of saw, square"*. The LFO
+   moves the saw's LEVEL in a straight line each eighth; the filter stays still. The lead sounds only with the chords
+   (and is heavier, an octave below added); a pluck carries the melody. The bass's voice is a driven, clipped saw and
+   square — the 808 only the sub under it (third request for a harder bass: it was the WAVE, not more drive on a sine).
+   *(drops.py --lfo)*
 9. *My own reading, awaiting a verdict:* the earlier batches sat an octave too high; the registers are lower now.
 
 ## Batches
+
+### drops-011 (2026-11-28) — the straight fade, a chord-gated heavy lead, a melody pluck, a saw-and-square bass
+
+The five songs of drops-010. Saw: the eighth-note LFO on the level only (measured across one eighth, option 1:
+1.00 · 0.94 · 0.85 · 0.73 · 0.59 · 0.46 · 0.27 · 0.11): 1 **Fade to silence** · 2 **Fade to a fifth** · 3 **Fade, a
+touch darker** · 4 **Gentle fade** · 5 **Fade, pulse**. Lead: the Glass stack + an octave below, only kick-to-snare.
+Pluck: the thick supersaw pluck on the whole melody (−15 LUFS). Bass: a saw and a square through a ladder at 1.3 kHz,
+driven and clipped, the 808 5 dB under it (−12.5 LUFS). *Awaiting verdicts.*
 
 ### drops-010 (2026-11-28) — the Digital saw, the lead on the LFO too, a heavier bass, five songs
 
@@ -100,7 +115,8 @@ Each option its own mood and simple melody (the last bar of every eight a slow r
 the falling eighth-note LFO, the bass at −12.5 LUFS (808 at full drive + a 22 dB-driven layer as loud as it, glued):
 1 Longing · "Three notes" · Digital · 2 Bittersweet · "Climb to the ninth" · Digital, harder · 3 Dreamy · "Hold and
 fall" · Digital pulse · 4 Lifted · "One note a bar" · Digital acid · 5 Falling · "The rise" · Digital, cleaner.
-87–100 % of strong notes in the chord. *Awaiting verdicts.*
+87–100 % of strong notes in the chord. verdict (chat): less wob, a linear fade; lead heavier and with the chords; a
+pluck for the melody; the bass harder, saw and square → lesson 25, drops-011.
 
 ### drops-009 (2026-11-28) — the falling eighth-note LFO, a heavier bass, a more electronic saw
 
