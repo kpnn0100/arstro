@@ -373,6 +373,33 @@ def call_lines(c):
             dict(c["pluck"], mood=c["mood"], shape=c["name"] + " (pluck)", how=""))
 
 
+# THE SUPERSAW WITH AN LFO (the user, 2026-11-28: "try future bass with 1 4 6 kick like before, but super saw lfo"):
+# the chord saw's filter or level moved by the synth's own LFO, locked to the beat. Merged over the design's saw patch.
+_LP = dict(filter__mode='"lowpass 24"', filter__res=0.15, filter__keytrack=0.3, lfo__fade=0)
+SAW_LFOS = [
+    dict(name="Eighth-note wob", words="a 24 dB low-pass at 900 Hz that a sine LFO opens 2.6 octaves and closes every "
+         "EIGHTH note — the classic future bass 'wub-wub' chord",
+         patch=dict(_LP, filter__cutoff=900, lfo__shape="sine", lfo__sync='"1/8"', lfo__cutoff=2.6)),
+    dict(name="Triplet wob", words="the same filter, the LFO in eighth-note TRIPLETS — three wobbles a beat, rolling "
+         "against the straight drums",
+         patch=dict(_LP, filter__cutoff=900, lfo__shape="sine", lfo__sync='"1/8T"', lfo__cutoff=2.6)),
+    dict(name="Sixteenth flutter", words="a brighter filter (1.6 kHz) fluttered 1.6 octaves by a triangle LFO every "
+         "SIXTEENTH — a fast shimmer more than a wobble",
+         patch=dict(_LP, filter__cutoff=1600, lfo__shape="triangle", lfo__sync='"1/16"', lfo__cutoff=1.6)),
+    dict(name="Quarter swell", words="the filter at 700 Hz opened 3 octaves and closed once every QUARTER note — slow, "
+         "wide 'wow's",
+         patch=dict(_LP, filter__cutoff=700, lfo__shape="sine", lfo__sync='"1/4"', lfo__cutoff=3.0)),
+    dict(name="Gate", words="the filter left open; a square LFO switches the LEVEL on and off every eighth note and "
+         "nudges the filter — a chopped, stuttering chord",
+         patch=dict(_LP, filter__cutoff=5000, filter__res=0.05, lfo__shape="square", lfo__sync='"1/8"', lfo__amp=0.85,
+                    lfo__cutoff=0.6)),
+]
+SAW_EXTRA = {}          # set by main() for --lfo: the LFO patch laid over every saw layer
+EASY = dict(mood="Longing", shape="Three notes", how="a long note, a step down, a long note — the same rhythm every two "
+            "bars (a simple line, so the saw is what you judge)",
+            units=["B5:3 A5:1 G5:4", "B5:3 A5:1 G5:4", "C6:3 B5:1 A5:4", "B5:3 A5:1 F#5:4"], last="B5:3 A5:1 B5:4", home="E6")
+
+
 def melody_notes(mel):
     """[(beat, length, midi)] over the 16 bars: the four units, then three of them and the last, then home."""
     out, texts = [], mel["units"] + mel["units"][:3] + [mel["last"]]
@@ -461,7 +488,7 @@ def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None, m
     bus = S.bus("Saw")
     for kind, part, shift, patch in opt["saw"]:
         ch, dv, pt = S.instrument(kind, f"Saw {part}", L)
-        S.set(dv, volume=-10, **dict(FLAT, **patch))
+        S.set(dv, volume=-10, **dict(dict(FLAT, **patch), **SAW_EXTRA))
         notes = []
         for t, d, (_, voicing, _) in seg:
             ps = [midi(n) for n in voicing.split()]
@@ -552,6 +579,7 @@ def main():
     ap.add_argument("--leads", action="store_true", help="the LEADS: five lead SOUNDS on one melody and mood")
     ap.add_argument("--calls", action="store_true", help="CALLS: call and response between the loved lead and a pluck")
     ap.add_argument("--plucks", action="store_true", help="THICK: five clean, thick pluck sounds on the first of CALLS")
+    ap.add_argument("--lfo", action="store_true", help="SAW_LFOS: the supersaw's filter or level moved by a beat-locked LFO")
     ap.add_argument("--design", default="808", help="with --moods / --melody: which of OPTIONS plays them")
     a = ap.parse_args()
     out = os.path.abspath(os.path.expanduser(a.out))
@@ -572,18 +600,21 @@ def main():
     design = next(o for o in OPTIONS if o["name"].lower() == a.design.lower())
     by = {m["name"]: m for m in MOODS}
     c0 = CALLS[0]
-    runs = ([(by[c0["mood"]], design, call_lines(c0)[0], LEADS[0], dict(call_lines(c0)[1], sound=x)) for x in THICK]
+    runs = ([(by["Longing"], design, EASY, LEADS[0], None)] * len(SAW_LFOS) if a.lfo else [(by[c0["mood"]], design, call_lines(c0)[0], LEADS[0], dict(call_lines(c0)[1], sound=x)) for x in THICK]
             if a.plucks else [(by[c["mood"]], design, call_lines(c)[0], LEADS[0], dict(call_lines(c)[1], sound=c["sound"])) for c in CALLS]
              if a.calls else [(by[MELODIES[0]["mood"]], design, MELODIES[0], ld, None) for ld in LEADS] if a.leads else
             [(by[x["mood"]], design, x, None, None) for x in MELODIES] if a.melody else
             [(m, design, None, None, None) for m in MOODS] if a.moods else [(None, o, None, None, None) for o in OPTIONS])
     for k, (mood, opt, mel, ld, pl) in enumerate(runs, 1):
-        sid = f"pluck-{k}" if a.plucks else f"call-{k}" if pl else f"lead-{k}" if ld else f"melody-{k}" if mel else (f"mood-{k}" if mood else f"drop-{k}")
+        sid = f"sawlfo-{k}" if a.lfo else f"pluck-{k}" if a.plucks else f"call-{k}" if pl else f"lead-{k}" if ld else f"melody-{k}" if mel else (f"mood-{k}" if mood else f"drop-{k}")
         if only and str(k) not in only:
             if sid in old:
                 items.append(old[sid])
             continue
         trim, ok, E = {}, True, []
+        SAW_EXTRA.clear()
+        if a.lfo:
+            SAW_EXTRA.update(SAW_LFOS[k - 1]["patch"])
         for attempt in ((1, 2) if not a.quick else (2,)):
             if mood:
                 seg, snares = mood_segments(mood)
@@ -606,7 +637,7 @@ def main():
             if attempt == 1:
                 trim = {n: max(-18, min(12, round(TARGETS[n] - v, 1))) for n, v in lufs.items() if v is not None and v > -60}
         failed += not ok
-        title = (f"Pluck {k} — {PLUCKS[pl['sound']][0].split(' — ')[0]}" if a.plucks else f"Call {k} — {mel['shape']}, over {mood['name']}: {mel['how']}" if pl else f"Lead {k} — {ld['name']}: {ld['source']}" if ld else f"Melody {k} — {mel['shape']}, over {mood['name']} ({mood['chords']})" if mel else
+        title = (f"Saw LFO {k} — {SAW_LFOS[k - 1]['name']}: {SAW_LFOS[k - 1]['words']}" if a.lfo else f"Pluck {k} — {PLUCKS[pl['sound']][0].split(' — ')[0]}" if a.plucks else f"Call {k} — {mel['shape']}, over {mood['name']}: {mel['how']}" if pl else f"Lead {k} — {ld['name']}: {ld['source']}" if ld else f"Melody {k} — {mel['shape']}, over {mood['name']} ({mood['chords']})" if mel else
                  f"Mood {k} — {mood['name']}: {mood['chords']}" if mood else f"Drop {k} — {opt['name']}: {opt['about']}")
         item = {"id": sid, "title": title, "sound": True, "section": "drop",
                 "style": "future-bass", "style_label": "Future bass drop — kick, snare, saw, bass", "bpm": BPM,

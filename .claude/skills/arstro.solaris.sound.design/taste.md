@@ -77,15 +77,37 @@ changes a patch (`scripts/futurebass.py` and `references/analog-patches.md`, tog
    more advanced so it got good ending"* (2026-11-28). The simple rhythm holds for six bars; the last bar of every
    eight is where the line may run (to the leading tone, then home), the snare fills, and the chord stabs once more.
    *(dubstep.py: the `u % 4 == 3` ending, `SIMPLE`'s fourth unit and `last`)*
+22. **The ending run is slow.** On dubstep-005 (a flurry of sixteenths in the last beat): *"the final note run should be
+   more slow, maybe run at the last bar not last beat"* — the ending is the whole last BAR, in quarter notes; the snare
+   fill in eighths. *(dubstep.py `SONGS`)*
 9. *My own reading, awaiting a verdict:* the earlier batches sat an octave too high; the registers are lower now.
 
 ## Batches
+
+### drops-008 (2026-11-28) — future bass again: the supersaw with an LFO
+
+*"wait, try future bass with 1 4 6 kick like before, but super saw lfo"*. The drops-002 pattern (kick 1, 4, 6 · snare
+3, 7), Longing, the 808, the Glass stack on a simple line; the chord saw's filter or level moved by the synth's
+beat-locked LFO (`drops.py --lfo`, `SAW_LFOS`):
+1 **Eighth-note wob** (measured 5.0 Hz) · 2 **Triplet wob** (7.5 Hz) · 3 **Sixteenth flutter** (10 Hz) · 4 **Quarter
+swell** (2.5 Hz) · 5 **Gate** (the level switched every eighth, 5.0 Hz). The saw still stops at the snare.
+*Awaiting verdicts.*
+
+### dubstep-006 (2026-11-28) — five new songs: key, tempo, progression, melody, arp
+
+*"try 5 new chord progression, melody and style, the final note run should be more slow …"*:
+1 **Anthem** (G major, 150: G · D/F♯ · Em7 · Cadd9 → D) · 2 **Heartbreak** (A minor, 140: Am9 · Fmaj7 · Cadd9 · G → E7)
+· 3 **Epic** (D minor, 145: Dm9 · B♭maj7 · Fadd9 · A7sus4 → A7) · 4 **Nostalgia** (C major, 150: Fmaj9 · G · Am7 · Em7
+→ Gsus4) · 5 **Dark hero** (E Dorian, 142: Em(add9) · G · Dadd9 · A → B). Simple melodies (lesson 20), the last bar of
+every eight a run of four quarter notes; 91–100 % of long notes in the chord. *Awaiting verdicts — the user moved to
+drops-008 while it rendered.*
 
 ### dubstep-005 (2026-11-28) — the simple melodies, with an ending to every loop
 
 The same five; in the last bar of every eight: the lead leaves its rhythm for a short run (up to the leading tone the
 first time, into the home note the second), four snares rising in the last beat, one more chord stab with kick, bass
-and arp on that beat; the piece ends on the home chord held a whole bar. 21–33 notes a melody. *Awaiting verdicts.*
+and arp on that beat; the piece ends on the home chord held a whole bar. 21–33 notes a melody.
+No marks; in chat: new progressions, melodies and styles, and a slower run → lesson 22, dubstep-006.
 
 ### dubstep-004 (2026-11-28) — the same drop, five SIMPLE melodies
 
