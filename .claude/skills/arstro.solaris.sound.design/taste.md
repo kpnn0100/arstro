@@ -85,16 +85,30 @@ changes a patch (`scripts/futurebass.py` and `references/analog-patches.md`, tog
    eight note wob is correct"*. The LFO is a falling ramp (the synth's `saw`: full at the start of each eighth, fading
    to its end) on the cutoff, and on the level — never a sine. The bass is the 808 PLUS a driven mid layer.
    "Electronic" is being asked of the saw: pulse waves, resonance, clipping (drops-009 tries three). *(drops.py --lfo)*
+24. **The crushed saw; the lead pulses too; heavier still.** drops-009: *"lead lfo too, and need more heavy bass, try
+   different melody and chord for each option, option 5's saw have pontential"*. The "Digital" saw (the falling LFO,
+   clipped, half-crushed) is the reading of "electronic" that landed; the lead takes the same falling eighth-note LFO;
+   the bass has now been asked heavier TWICE — if a third time, it is the instrument or the level of the kick, not
+   more drive. A batch should vary chords and melody, not one song five times. *(drops.py --lfo, `LFO_SONGS`)*
 9. *My own reading, awaiting a verdict:* the earlier batches sat an octave too high; the registers are lower now.
 
 ## Batches
+
+### drops-010 (2026-11-28) — the Digital saw, the lead on the LFO too, a heavier bass, five songs
+
+Each option its own mood and simple melody (the last bar of every eight a slow run), the lead's filter and level on
+the falling eighth-note LFO, the bass at −12.5 LUFS (808 at full drive + a 22 dB-driven layer as loud as it, glued):
+1 Longing · "Three notes" · Digital · 2 Bittersweet · "Climb to the ninth" · Digital, harder · 3 Dreamy · "Hold and
+fall" · Digital pulse · 4 Lifted · "One note a bar" · Digital acid · 5 Falling · "The rise" · Digital, cleaner.
+87–100 % of strong notes in the chord. *Awaiting verdicts.*
 
 ### drops-009 (2026-11-28) — the falling eighth-note LFO, a heavier bass, a more electronic saw
 
 Every option: the saw LFO at an eighth, peak first and fading (measured: brightness across one eighth 1.00 · 0.81 ·
 0.61 · 0.38 · 0.21 · 0.12 · 0.07 · 0.05); the bass the 808 driven harder with a driven saw-and-square over it, −14 LUFS.
 1 **Filter fall** (the plain shape) · 2 **Filter and level** · 3 **Pulse** (pulse waves, their width swept) · 4 **Acid**
-(resonance 0.5, a driven ladder, 3 octaves) · 5 **Digital** (clipped, half-crushed to 9 bits). *Awaiting verdicts.*
+(resonance 0.5, a driven ladder, 3 octaves) · 5 **Digital** (clipped, half-crushed to 9 bits).
+verdict (chat): 5's saw "have potential" (recorded good) → lesson 24, drops-010.
 
 ### drops-008 (2026-11-28) — future bass again: the supersaw with an LFO
 

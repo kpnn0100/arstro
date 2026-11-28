@@ -64,7 +64,7 @@ line; runs beside it.
 - `[ ]` The melody and sound-design skills are written for a developer running the lab servers;
   each needs an "inside Solaris" section before an in-app agent is given them.
 
-**► K30** — the user judges drops-009 (the falling eighth-note saw LFO, heavier bass, electronic saws) and dubstep-006 (five new dubstep songs) (melodic dubstep to their specification: hard snare, 8-bit arp, heavy bass and lead) and drops-007 (five clean, thick plucks) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► K32** — the user judges drops-010 (the Digital saw, the LFO on the lead too, a heavier bass, five moods and melodies) and dubstep-006 (five new dubstep songs) (melodic dubstep to their specification: hard snare, 8-bit arp, heavy bass and lead) and drops-007 (five clean, thick plucks) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -1111,7 +1111,11 @@ good UI UX, physical base (math base) and follow music industrial standard / lea
       first and fade; bass heavier; saw more electronic. (dubstep-006 still unjudged.)
 - [x] **K29** drops-009: the falling `saw` LFO on cutoff and level (shape measured in the stem), `HEAVY` bass layer,
       three "electronic" saw variants.
-- [ ] **K30** The user's verdicts on drops-009 (and dubstep-006) → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
+- [x] **K30** The user's verdict on drops-009 (chat) → taste.md lesson 24: the Digital saw has potential; the lead on
+      the LFO too; a heavier bass; a different melody and chord per option.
+- [x] **K31** drops-010: `SAW_LFOS` five strengths of the Digital saw, `LEAD_LFO`, the bass heavier (−12.5 LUFS),
+      `LFO_SONGS` five moods with simple melodies.
+- [ ] **K32** The user's verdicts on drops-010 (and dubstep-006) → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
