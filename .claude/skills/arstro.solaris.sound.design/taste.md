@@ -80,9 +80,21 @@ changes a patch (`scripts/futurebass.py` and `references/analog-patches.md`, tog
 22. **The ending run is slow.** On dubstep-005 (a flurry of sixteenths in the last beat): *"the final note run should be
    more slow, maybe run at the last bar not last beat"* — the ending is the whole last BAR, in quarter notes; the snare
    fill in eighths. *(dubstep.py `SONGS`)*
+23. **The future bass saw wobbles at an eighth note, and the wobble FALLS.** drops-008: *"lfo is not correct … should
+   be peak at first then fade to end wave, also the bass is need to be more heavier, the saw need to more electronic,
+   eight note wob is correct"*. The LFO is a falling ramp (the synth's `saw`: full at the start of each eighth, fading
+   to its end) on the cutoff, and on the level — never a sine. The bass is the 808 PLUS a driven mid layer.
+   "Electronic" is being asked of the saw: pulse waves, resonance, clipping (drops-009 tries three). *(drops.py --lfo)*
 9. *My own reading, awaiting a verdict:* the earlier batches sat an octave too high; the registers are lower now.
 
 ## Batches
+
+### drops-009 (2026-11-28) — the falling eighth-note LFO, a heavier bass, a more electronic saw
+
+Every option: the saw LFO at an eighth, peak first and fading (measured: brightness across one eighth 1.00 · 0.81 ·
+0.61 · 0.38 · 0.21 · 0.12 · 0.07 · 0.05); the bass the 808 driven harder with a driven saw-and-square over it, −14 LUFS.
+1 **Filter fall** (the plain shape) · 2 **Filter and level** · 3 **Pulse** (pulse waves, their width swept) · 4 **Acid**
+(resonance 0.5, a driven ladder, 3 octaves) · 5 **Digital** (clipped, half-crushed to 9 bits). *Awaiting verdicts.*
 
 ### drops-008 (2026-11-28) — future bass again: the supersaw with an LFO
 
@@ -91,7 +103,7 @@ changes a patch (`scripts/futurebass.py` and `references/analog-patches.md`, tog
 beat-locked LFO (`drops.py --lfo`, `SAW_LFOS`):
 1 **Eighth-note wob** (measured 5.0 Hz) · 2 **Triplet wob** (7.5 Hz) · 3 **Sixteenth flutter** (10 Hz) · 4 **Quarter
 swell** (2.5 Hz) · 5 **Gate** (the level switched every eighth, 5.0 Hz). The saw still stops at the snare.
-*Awaiting verdicts.*
+verdict (chat): the eighth-note rate is right; the sine shape is wrong; bass heavier; saw more electronic → lesson 23.
 
 ### dubstep-006 (2026-11-28) — five new songs: key, tempo, progression, melody, arp
 

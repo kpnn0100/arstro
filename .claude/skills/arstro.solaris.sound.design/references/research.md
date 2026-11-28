@@ -30,6 +30,14 @@
 These are techniques, rebuilt on the analog synth as `drops.py` `LEADS`; no artist's patch, melody or sample is copied.
 (The exact article URLs were read through search results and a fetch agent; Splice's page refused the fetch.)
 
+## The supersaw's LFO
+
+The user gave the shape themselves (2026-11-28): the peak first, fading to the end of the wave, at an eighth note. A
+search for a published Serum recipe confirming it found none readable: Production Music Live's "Future bass LFO wobble
+pad" (https://productionmusiclive.com/blogs/news/117785925-future-bass-lfo-wobble-pad-with-serum-louis-the-child-darren-ashley-style)
+is behind a paywall; Sleepfreaks' LFO Tool guide (https://sleepfreaks-dtm.com/en/softsynth/xfer-lfo-tool) says only to
+move level and cutoff together on chords. The shape here is the user's word, built on the synth's falling `saw` LFO.
+
 ## Melodic dubstep
 
 | source | what it gave |

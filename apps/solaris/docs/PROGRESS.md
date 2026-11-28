@@ -64,7 +64,7 @@ line; runs beside it.
 - `[ ]` The melody and sound-design skills are written for a developer running the lab servers;
   each needs an "inside Solaris" section before an in-app agent is given them.
 
-**► K28** — the user judges drops-008 (future bass, the supersaw with an LFO) and dubstep-006 (five new dubstep songs) (melodic dubstep to their specification: hard snare, 8-bit arp, heavy bass and lead) and drops-007 (five clean, thick plucks) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
+**► K30** — the user judges drops-009 (the falling eighth-note saw LFO, heavier bass, electronic saws) and dubstep-006 (five new dubstep songs) (melodic dubstep to their specification: hard snare, 8-bit arp, heavy bass and lead) and drops-007 (five clean, thick plucks) in the Sound Lab (http://127.0.0.1:8788/); fold their verdicts into the sound design skill's taste. Owed live checks: Alt+wheel in the GTK window (a desktop may keep Alt+wheel for itself), and the ones before. Owed live checks: N43's language switch in the GTK window (and a Vietnamese desktop's `auto`), N42's screen reader (Orca on an unlocked desktop), D-5, D-9, the resize cursor, N40's video window on a real file, N4's meters in the GTK window, N8's PipeWire playback on a PipeWire server, N16's recording through a real input, N28 against a real surface, N32 against a second real card. B13+ wait (ask).
 
 ---
 
@@ -1107,7 +1107,11 @@ good UI UX, physical base (math base) and follow music industrial standard / lea
 - [x] **K26** dubstep-006: `dubstep.py` `SONGS` — five keys, tempos, progressions, arps and simple melodies; per-song bpm.
 - [x] **K27** drops-008: `drops.py --lfo` — the future bass drop (kick 1, 4, 6) with five beat-locked LFO treatments of
       the supersaw; rates measured in the stems (5.0, 7.5, 10, 2.5, 5.0 Hz).
-- [ ] **K28** The user's verdicts on drops-008 and dubstep-006 → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
+- [x] **K28** The user's verdict on drops-008 (chat) → taste.md lesson 23: eighth-note rate right, the LFO must peak
+      first and fade; bass heavier; saw more electronic. (dubstep-006 still unjudged.)
+- [x] **K29** drops-009: the falling `saw` LFO on cutoff and level (shape measured in the stem), `HEAVY` bass layer,
+      three "electronic" saw variants.
+- [ ] **K30** The user's verdicts on drops-009 (and dubstep-006) → taste.md. (Offered, not started: the analog synth as a VST3 plugin.)
 
 ### T — tasks found on the way
 - [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via

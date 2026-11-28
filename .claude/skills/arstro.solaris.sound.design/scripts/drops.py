@@ -375,25 +375,40 @@ def call_lines(c):
 
 # THE SUPERSAW WITH AN LFO (the user, 2026-11-28: "try future bass with 1 4 6 kick like before, but super saw lfo"):
 # the chord saw's filter or level moved by the synth's own LFO, locked to the beat. Merged over the design's saw patch.
-_LP = dict(filter__mode='"lowpass 24"', filter__res=0.15, filter__keytrack=0.3, lfo__fade=0)
+# The LFO's SHAPE (the user on drops-008: "lfo is not correct … should be peak at first then fade to end wave … eight
+# note wob is correct"): a falling ramp — the synth's `saw` LFO is 1 − 2t, +1 at the start of every eighth and falling
+# to −1 (AnalogSynth (A18)) — so each eighth OPENS at once and closes; on the level the same LFO is full at the start
+# and fades. Every option is that shape at an eighth note; they differ in how ELECTRONIC the saw is.
+_LP = dict(filter__mode='"lowpass 24"', filter__keytrack=0.3, lfo__fade=0, lfo__shape="saw", lfo__sync='"1/8"')
 SAW_LFOS = [
-    dict(name="Eighth-note wob", words="a 24 dB low-pass at 900 Hz that a sine LFO opens 2.6 octaves and closes every "
-         "EIGHTH note — the classic future bass 'wub-wub' chord",
-         patch=dict(_LP, filter__cutoff=900, lfo__shape="sine", lfo__sync='"1/8"', lfo__cutoff=2.6)),
-    dict(name="Triplet wob", words="the same filter, the LFO in eighth-note TRIPLETS — three wobbles a beat, rolling "
-         "against the straight drums",
-         patch=dict(_LP, filter__cutoff=900, lfo__shape="sine", lfo__sync='"1/8T"', lfo__cutoff=2.6)),
-    dict(name="Sixteenth flutter", words="a brighter filter (1.6 kHz) fluttered 1.6 octaves by a triangle LFO every "
-         "SIXTEENTH — a fast shimmer more than a wobble",
-         patch=dict(_LP, filter__cutoff=1600, lfo__shape="triangle", lfo__sync='"1/16"', lfo__cutoff=1.6)),
-    dict(name="Quarter swell", words="the filter at 700 Hz opened 3 octaves and closed once every QUARTER note — slow, "
-         "wide 'wow's",
-         patch=dict(_LP, filter__cutoff=700, lfo__shape="sine", lfo__sync='"1/4"', lfo__cutoff=3.0)),
-    dict(name="Gate", words="the filter left open; a square LFO switches the LEVEL on and off every eighth note and "
-         "nudges the filter — a chopped, stuttering chord",
-         patch=dict(_LP, filter__cutoff=5000, filter__res=0.05, lfo__shape="square", lfo__sync='"1/8"', lfo__amp=0.85,
-                    lfo__cutoff=0.6)),
+    dict(name="Filter fall", words="the plain shape: a 24 dB low-pass that snaps open to ~6 kHz at the start of every "
+         "eighth note and falls shut to ~250 Hz by its end",
+         patch=dict(_LP, filter__cutoff=1200, filter__res=0.2, lfo__cutoff=2.3), fx=[]),
+    dict(name="Filter and level", words="the same fall, and the LEVEL falls with it (to a quarter) — every eighth is a "
+         "hit that dies away: tighter, more chopped",
+         patch=dict(_LP, filter__cutoff=1300, filter__res=0.2, lfo__cutoff=2.2, lfo__amp=0.75), fx=[]),
+    dict(name="Pulse", words="more ELECTRONIC by the wave: the octave stack becomes pulse waves whose width the LFO "
+         "sweeps with the filter — a hollow, synthetic edge; more resonance",
+         patch=dict(_LP, filter__cutoff=1300, filter__res=0.35, lfo__cutoff=2.3, lfo__amp=0.5, osc2__wave="pulse",
+                    osc2__width=0.5, lfo__width=0.3, sub__noise=0), fx=[]),
+    dict(name="Acid", words="more ELECTRONIC by the filter: resonance at half and the ladder driven 8 dB, swept 3 "
+         "octaves — each eighth 'zaps' down with a whistle on top",
+         patch=dict(_LP, filter__cutoff=1100, filter__res=0.5, filter__drive=8, lfo__cutoff=3.0, lfo__amp=0.4,
+                    sub__noise=0), fx=[]),
+    dict(name="Digital", words="more ELECTRONIC by what follows: the falling filter and level, then clipped hard and "
+         "half-crushed to 9 bits at 16 kHz — gritty, like a machine",
+         patch=dict(_LP, filter__cutoff=1400, filter__res=0.3, lfo__cutoff=2.4, lfo__amp=0.6, sub__noise=0),
+         fx=[("saturator", dict(drive=8, curve="hard", mix=1, output=-5)),
+             ("bitcrusher", dict(bits=9, rate=16000, mix=0.5, output=0))]),
 ]
+# the HEAVIER bass for --lfo ("the bass is need to be more heavier"): the loved 808 pushed harder, and over it a saw
+# and a square through a driven ladder, saturated — both with every kick
+HEAVY = dict(osc1__wave="saw", osc1__octave=-1, osc1__unison=1, osc1__level=0.8, osc2__wave="pulse", osc2__width=0.5,
+             osc2__octave=-1, osc2__unison=1, osc2__level=0.55, sub__level=0, filter__mode='"lowpass 24"',
+             filter__cutoff=340, filter__res=0.1, filter__drive=16, filter__env=1.8, filter__keytrack=0.3, fenv__attack=0,
+             fenv__decay=320, fenv__sustain=0.4, fenv__release=80, amp__attack=1, amp__decay=0, amp__sustain=1,
+             amp__release=40, velocity=0, voice__mode="mono", voice__glide=0, voice__phase="reset", voice__drift=0, volume=-8)
+SAW_FX = []             # set by main() for --lfo: effects on the saw bus, before its EQ
 SAW_EXTRA = {}          # set by main() for --lfo: the LFO patch laid over every saw layer
 EASY = dict(mood="Longing", shape="Three notes", how="a long note, a step down, a long note — the same rhythm every two "
             "bars (a simple line, so the saw is what you judge)",
@@ -496,6 +511,8 @@ def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None, m
             notes += [(p + shift, t, max(0.1, d - 0.04), 110) for p in ps]
         S.notes(pt, notes)
         line(f"route {ch} --to {bus}")
+    for fkind, fparams in SAW_FX:
+        S.device(bus, fkind, **fparams)
     S.device(bus, "eq", lowcut__on="on", lowcut__freq=150, peak1__freq=350, peak1__gain=-2, peak1__q=1)
     S.device(bus, "imager", width=140, mono="on", frequency=200)
     S.device(bus, "reverb", decay=1200, size=90, mix=0.07, lowcut=400, highcut=10000, width=0.9)
@@ -506,15 +523,30 @@ def arrange(opt, kick_file, trim=None, seg=None, snares=None, kick_words=None, m
     # the bass: the root, with the saw
     kind, shift, patch, fx = opt["bass"]
     bass, bdv, bpt = S.instrument(kind, "Bass", L)
-    S.set(bdv, **(dict(MONO, **patch) if kind == "analog" else patch))
+    S.set(bdv, **(dict(MONO, **patch) if kind == "analog" else dict(patch, drive=0.8) if SAW_EXTRA else patch))
     S.notes(bpt, [(midi(root) + shift, t, max(0.1, d - 0.04), 115) for t, d, (_, _, root) in seg])
     for fkind, fparams in fx:
         S.device(bass, fkind, **fparams)
+    heavy = ""
+    if SAW_EXTRA:                                                    # --lfo: the heavy layer, both on one Bass bus
+        bbus = S.bus("Bass")
+        line(f"route {bass} --to {bbus}")
+        hv, hvd, hvp = S.instrument("analog", "Bass heavy", L)
+        S.set(hvd, **HEAVY)
+        S.notes(hvp, [(midi(root) + (12 if midi(root) < midi("C2") else 0) + 12, t, max(0.1, d - 0.04), 115)
+                      for t, d, (_, _, root) in seg])
+        S.device(hv, "saturator", drive=14, curve="tube", mix=1, output=-6)
+        S.device(hv, "eq", lowcut__on="on", lowcut__freq=90)
+        line(f"set {hv}.gain=-3")
+        line(f"route {hv} --to {bbus}")
+        bass = bbus
+        heavy = (" HEAVIER: the 808 driven harder (0.8), and an octave over it a saw and a square through a ladder at "
+                 "340 Hz driven 16 dB, then a tube — and 2 dB louder in the mix")
     S.device(bass, "imager", width=0, mono="on", frequency=200)
     line(f"strip duck {bass} --under {kick} --amount 14")
     S.set(S.new('dv'), release=70)
-    E.append({"name": "Bass", "strip": bass, "recipe": opt["bass_note"] + ". With every kick, the saw's lengths, no "
-              "glide; mono; ducked 14 dB by the kick and back in ~150 ms"})
+    E.append({"name": "Bass", "strip": bass, "recipe": opt["bass_note"] + "." + heavy + " With every kick, the saw's "
+              "lengths, no glide; mono; ducked 14 dB by the kick and back in ~150 ms"})
     if melody:   # the lead: its layers on one bus, then an echo and a room
         lead = lead or PLAIN
         lbus = S.bus("Lead")
@@ -613,8 +645,11 @@ def main():
             continue
         trim, ok, E = {}, True, []
         SAW_EXTRA.clear()
+        del SAW_FX[:]
         if a.lfo:
             SAW_EXTRA.update(SAW_LFOS[k - 1]["patch"])
+            SAW_FX.extend(SAW_LFOS[k - 1]["fx"])
+            TARGETS["Bass"] = -14.0
         for attempt in ((1, 2) if not a.quick else (2,)):
             if mood:
                 seg, snares = mood_segments(mood)
